@@ -1,0 +1,115 @@
+import Combine
+import SwiftUI
+import UIKit
+import ComposeApp
+
+/// Kotlin auth state as an ObservableObject. Kotlin delivers updates on the main thread.
+final class SessionModel: ObservableObject {
+    @Published private(set) var snapshot: SessionSnapshot?
+    private let bridge = SessionBridge()
+    private var observation: SessionObservation?
+
+    init() {
+        observation = bridge.observe { [weak self] snapshot in
+            self?.snapshot = snapshot
+        }
+    }
+
+    deinit {
+        observation?.cancel()
+    }
+
+    func signOut() { bridge.signOut() }
+    func retry() { bridge.retry() }
+}
+
+/// Title and bar buttons reported by one Compose screen.
+final class ScreenChromeModel: ObservableObject {
+    let host = ScreenHost()
+    @Published var title: String?
+    @Published var items: [ChromeItem] = []
+    @Published var interceptBack = false
+
+    init() {
+        host.onChange = { [weak self] state in
+            self?.title = state.title
+            self?.items = state.items
+            self?.interceptBack = state.interceptBack
+        }
+    }
+}
+
+/// A Compose screen inside a NavigationStack: SwiftUI draws the navigation bar from what the screen reports.
+struct ComposeScreen: View {
+    let title: String
+    var displayMode: NavigationBarItem.TitleDisplayMode = .inline
+    let make: (ScreenHost) -> UIViewController
+    @StateObject private var chrome = ScreenChromeModel()
+
+    var body: some View {
+        ComposeController(make: { make(chrome.host) })
+            .background(Color(.appBackground))
+            .navigationTitle(chrome.title ?? title)
+            .navigationBarTitleDisplayMode(displayMode)
+            // Screens with unsaved input (e.g. a workout session) confirm before leaving.
+            .navigationBarBackButtonHidden(chrome.interceptBack)
+            .toolbar {
+                if chrome.interceptBack {
+                    ToolbarItem(placement: .topBarLeading) {
+                        Button { chrome.host.back() } label: { Image(systemName: "chevron.backward") }
+                            .accessibilityLabel("Back")
+                    }
+                }
+                ToolbarItemGroup(placement: .topBarTrailing) {
+                    ForEach(chrome.items, id: \.id) { item in
+                        ChromeButton(item: item) { chrome.host.trigger(id: item.id) }
+                    }
+                }
+            }
+    }
+}
+
+/// A full-screen Compose view without navigation chrome (sign in, join coach).
+struct ComposeFullScreen: View {
+    let make: () -> UIViewController
+
+    var body: some View {
+        ComposeController(make: make).ignoresSafeArea()
+    }
+}
+
+private struct ChromeButton: View {
+    let item: ChromeItem
+    let action: () -> Void
+
+    var body: some View {
+        if !item.tappable {
+            Text(item.label)
+                .font(.subheadline.monospacedDigit())
+                .foregroundStyle(.secondary)
+        } else if let symbol = item.sfSymbol {
+            Button(action: action) { Image(systemName: symbol) }
+                .accessibilityLabel(item.label)
+                .disabled(!item.enabled)
+        } else {
+            Button(item.label, action: action)
+                .fontWeight(.semibold)
+                .disabled(!item.enabled)
+        }
+    }
+}
+
+private struct ComposeController: UIViewControllerRepresentable {
+    let make: () -> UIViewController
+
+    func makeUIViewController(context: Context) -> UIViewController { make() }
+    func updateUIViewController(_ uiViewController: UIViewController, context: Context) {}
+}
+
+/// Navigation path for one tab's NavigationStack.
+final class Navigator<Route: Hashable>: ObservableObject {
+    @Published var path: [Route] = []
+
+    func push(_ route: Route) { path.append(route) }
+    func pop() { if !path.isEmpty { path.removeLast() } }
+}
