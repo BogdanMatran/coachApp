@@ -1,6 +1,6 @@
 package ch.coachapp.feature.auth
 
-import androidx.compose.foundation.background
+import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawingPadding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
@@ -17,14 +18,18 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigationevent.NavigationEventInfo
@@ -70,6 +75,26 @@ fun AuthScreen(
         isBackEnabled = state.mode == AuthMode.SignUp,
         onBackCompleted = { onModeChange(AuthMode.SignIn) },
     )
+    // Which field has focus decides what the lifter does: watch the email, cover their eyes for
+    // the password, press the bar overhead while signing in.
+    var focused by remember { mutableStateOf<AuthField?>(null) }
+    val pose = when {
+        state.loading -> LifterPose.Lifting
+        focused == AuthField.Password -> LifterPose.Covering
+        focused != null -> LifterPose.Watching
+        else -> LifterPose.Idle
+    }
+    val watchedText = when (focused) {
+        AuthField.Name -> state.fullName
+        AuthField.Invite -> state.inviteCode
+        else -> state.email
+    }
+    // Smaller while typing, so it stays in view above the keyboard.
+    val mascotSize by animateDpAsState(if (focused != null) 150.dp else 200.dp, label = "mascotSize")
+    fun Modifier.tracks(field: AuthField) = onFocusChanged { focus ->
+        if (focus.isFocused) focused = field else if (focused == field) focused = null
+    }
+
     Box(
         Modifier.fillMaxSize().safeDrawingPadding().imePadding().verticalScroll(rememberScrollState()),
         contentAlignment = Alignment.TopCenter,
@@ -78,10 +103,31 @@ fun AuthScreen(
             Modifier.widthIn(max = 420.dp).fillMaxWidth().padding(24.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            BrandHeader(Modifier.padding(bottom = 12.dp))
+            Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
+                LifterMascot(
+                    pose = pose,
+                    look = (watchedText.length / 28f).coerceIn(0f, 1f),
+                    shakeKey = state.error,
+                    modifier = Modifier.size(mascotSize),
+                )
+                Text(
+                    "CoachApp",
+                    style = MaterialTheme.typography.displaySmall,
+                    fontWeight = FontWeight.Bold,
+                    color = LocalAppColors.current.accText,
+                    modifier = Modifier.padding(top = 8.dp),
+                )
+                Text(
+                    "Your plan, your progress and your coach, in one place.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = LocalAppColors.current.label2,
+                    textAlign = TextAlign.Center,
+                )
+            }
             Text(
                 if (state.mode == AuthMode.SignIn) "Welcome back" else "Create your account",
                 style = MaterialTheme.typography.headlineSmall,
+                modifier = Modifier.padding(top = 8.dp),
             )
 
             if (state.mode == AuthMode.SignUp) {
@@ -98,7 +144,7 @@ fun AuthScreen(
                     label = { Text("Full name") },
                     singleLine = true,
                     keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Words, imeAction = ImeAction.Next),
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier.fillMaxWidth().tracks(AuthField.Name),
                 )
                 if (state.role == SignUpRole.Client) {
                     AppTextField(
@@ -115,7 +161,7 @@ fun AuthScreen(
                             }
                         },
                         keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Characters, imeAction = ImeAction.Next),
-                        modifier = Modifier.fillMaxWidth(),
+                        modifier = Modifier.fillMaxWidth().tracks(AuthField.Invite),
                     )
                 }
             }
@@ -126,7 +172,7 @@ fun AuthScreen(
                 label = { Text("Email") },
                 singleLine = true,
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email, imeAction = ImeAction.Next),
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier.fillMaxWidth().tracks(AuthField.Email),
             )
             AppTextField(
                 value = state.password,
@@ -136,7 +182,7 @@ fun AuthScreen(
                 visualTransformation = PasswordVisualTransformation(),
                 supportingText = if (state.mode == AuthMode.SignUp) ({ Text("At least 6 characters") }) else null,
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password, imeAction = ImeAction.Done),
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier.fillMaxWidth().tracks(AuthField.Password),
             )
 
             state.error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
@@ -159,23 +205,4 @@ fun AuthScreen(
     }
 }
 
-/** The first impression: the brand pair as a solid block, the wordmark set in the accent's partner. */
-@Composable
-private fun BrandHeader(modifier: Modifier = Modifier) {
-    val colors = LocalAppColors.current
-    Column(
-        modifier
-            .fillMaxWidth()
-            .clip(MaterialTheme.shapes.extraLarge)
-            .background(colors.acc)
-            .padding(horizontal = 24.dp, vertical = 32.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp),
-    ) {
-        Text("CoachApp", style = MaterialTheme.typography.displaySmall, fontWeight = FontWeight.Bold, color = colors.onAcc)
-        Text(
-            "Your plan, your progress and your coach, in one place.",
-            style = MaterialTheme.typography.bodyLarge,
-            color = colors.onAcc.copy(alpha = 0.85f),
-        )
-    }
-}
+private enum class AuthField { Name, Invite, Email, Password }
