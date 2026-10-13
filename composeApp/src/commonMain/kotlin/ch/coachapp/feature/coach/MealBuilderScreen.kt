@@ -17,15 +17,11 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
-import androidx.compose.material3.Card
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -39,6 +35,12 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
+import ch.coachapp.core.ui.ButtonSize
+import ch.coachapp.core.ui.NeutralButton
+import ch.coachapp.core.ui.GhostButton
+import ch.coachapp.core.ui.AppCard
+import ch.coachapp.core.ui.AppTextField
+import ch.coachapp.core.ui.LocalAppColors
 import ch.coachapp.core.fmt
 import ch.coachapp.core.ui.BackTopBar
 import ch.coachapp.core.ui.BarAction
@@ -193,8 +195,8 @@ fun MealBuilderScreen(state: MealBuilderUiState, actions: MealBuilderViewModel, 
                     item {
                         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                             state.saveError?.let { Text(it, color = MaterialTheme.colorScheme.error) }
-                            OutlinedTextField(draft.name, actions::setName, label = { Text("Plan name") }, singleLine = true, modifier = Modifier.fillMaxWidth())
-                            OutlinedTextField(draft.notes, actions::setNotes, label = { Text("Notes for the client") }, modifier = Modifier.fillMaxWidth())
+                            AppTextField(draft.name, actions::setName, label = { Text("Plan name") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                            AppTextField(draft.notes, actions::setNotes, label = { Text("Notes for the client") }, modifier = Modifier.fillMaxWidth())
                         }
                     }
                     item { TargetsCard(draft, actions) }
@@ -208,10 +210,7 @@ fun MealBuilderScreen(state: MealBuilderUiState, actions: MealBuilderViewModel, 
                         )
                     }
                     item {
-                        OutlinedButton(onClick = actions::addMeal, modifier = Modifier.fillMaxWidth()) {
-                            Icon(Icons.Default.Add, contentDescription = null)
-                            Text("Add meal")
-                        }
+                        NeutralButton("Add meal", { actions.addMeal() }, icon = Icons.Default.Add)
                     }
                 }
             }
@@ -252,14 +251,14 @@ private fun TargetsCard(draft: MealPlanDraft, actions: MealBuilderViewModel) {
 
 @Composable
 private fun MealCard(meal: MealDraft, index: Int, isLast: Boolean, actions: MealBuilderViewModel, onAddFood: () -> Unit) {
-    Card(Modifier.fillMaxWidth()) {
+    AppCard(Modifier.fillMaxWidth()) {
         Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                OutlinedTextField(meal.name, { actions.setMealName(meal.key, it) }, label = { Text("Meal") }, singleLine = true, modifier = Modifier.weight(2f))
-                OutlinedTextField(meal.timeHint, { actions.setMealTime(meal.key, it.take(10)) }, label = { Text("Time") }, singleLine = true, modifier = Modifier.weight(1f))
+                AppTextField(meal.name, { actions.setMealName(meal.key, it) }, label = { Text("Meal") }, singleLine = true, modifier = Modifier.weight(2f))
+                AppTextField(meal.timeHint, { actions.setMealTime(meal.key, it.take(10)) }, label = { Text("Time") }, singleLine = true, modifier = Modifier.weight(1f))
             }
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(meal.macros.summary(), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary, modifier = Modifier.weight(1f))
+                Text(meal.macros.summary(), style = MaterialTheme.typography.labelMedium, color = LocalAppColors.current.accText, modifier = Modifier.weight(1f))
                 IconButton(onClick = { actions.moveMealUp(index) }, enabled = index > 0) { Icon(Icons.Default.KeyboardArrowUp, "Move meal up") }
                 IconButton(onClick = { actions.moveMealDown(index) }, enabled = !isLast) { Icon(Icons.Default.KeyboardArrowDown, "Move meal down") }
                 IconButton(onClick = { actions.removeMeal(meal.key) }) { Icon(Icons.Default.Delete, "Remove meal") }
@@ -284,10 +283,7 @@ private fun MealCard(meal: MealDraft, index: Int, isLast: Boolean, actions: Meal
                     IconButton(onClick = { actions.removeItem(meal.key, item.key) }) { Icon(Icons.Default.Close, "Remove food") }
                 }
             }
-            TextButton(onClick = onAddFood) {
-                Icon(Icons.Default.Add, contentDescription = null)
-                Text("Add food")
-            }
+            GhostButton("Add food", onAddFood, size = ButtonSize.Sm, icon = Icons.Default.Add)
         }
     }
 }

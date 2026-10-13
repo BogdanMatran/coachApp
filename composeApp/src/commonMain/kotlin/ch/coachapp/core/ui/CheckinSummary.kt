@@ -50,15 +50,20 @@ private fun metric(value: Double?, previous: Double?, unit: String): String {
 }
 
 @Composable
-fun CheckinAnswers(checkin: Checkin, questions: List<CheckinQuestion>, modifier: Modifier = Modifier) {
+fun CheckinAnswers(checkin: Checkin, questions: List<CheckinQuestion>, modifier: Modifier = Modifier) =
+    AnswerList(checkin.answers, questions, modifier)
+
+/** Answers keyed by question id, used for check-ins and the onboarding form. */
+@Composable
+fun AnswerList(answers: Map<String, String>, questions: List<CheckinQuestion>, modifier: Modifier = Modifier) {
     // Show template questions first, then any answers to questions that were removed since.
     val known = questions.map { it.id }.toSet()
-    val extra = checkin.answers.keys.filter { it !in known }
+    val extra = answers.keys.filter { it !in known }
     Column(modifier, verticalArrangement = Arrangement.spacedBy(10.dp)) {
         questions.forEach { question ->
-            AnswerRow(question.label, formatAnswer(question.type, checkin.answers[question.id]))
+            AnswerRow(question.label, formatAnswer(question.type, answers[question.id]))
         }
-        extra.forEach { key -> AnswerRow(key, checkin.answers[key].orEmpty()) }
+        extra.forEach { key -> AnswerRow(key, answers[key].orEmpty()) }
         if (questions.isEmpty() && extra.isEmpty()) {
             Text("No questions answered.", color = MaterialTheme.colorScheme.onSurfaceVariant)
         }

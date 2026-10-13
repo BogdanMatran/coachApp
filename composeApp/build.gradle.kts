@@ -132,12 +132,15 @@ kotlin {
             implementation(libs.ktor.client.okhttp)
             implementation(libs.androidx.activity.compose)
             implementation(libs.coil.gif)
+            // Video playback; iOS uses AVPlayer directly instead (see VideoPlayer.ios.kt).
+            implementation(libs.composemediaplayer)
         }
         iosMain.dependencies {
             implementation(libs.ktor.client.darwin)
         }
         wasmJsMain.dependencies {
             implementation(libs.ktor.client.js)
+            implementation(libs.composemediaplayer)
         }
     }
 }

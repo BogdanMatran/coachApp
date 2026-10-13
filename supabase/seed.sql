@@ -173,8 +173,24 @@ begin
         {"id": "wins",      "label": "Wins and struggles",        "type": "text"}
     ]');
 
+    insert into public.checkin_templates (coach_id, kind, questions) values (v_coach, 'intake', '[
+        {"id": "goal",       "label": "What is your main goal?",                      "type": "text"},
+        {"id": "height",     "label": "Height (cm)",                                  "type": "number"},
+        {"id": "experience", "label": "Training experience (1 = new, 5 = advanced)",  "type": "scale"},
+        {"id": "injuries",   "label": "Any injuries or medical conditions?",          "type": "text"},
+        {"id": "days",       "label": "How many days a week can you train?",          "type": "number"},
+        {"id": "diet",       "label": "Do you follow a specific diet?",               "type": "text"}
+    ]');
+
     perform set_config('request.jwt.claims', '', true);
 end $$;
+
+-- Anna has done her onboarding; Ben hasn't, so signing in as Ben shows the form.
+insert into public.intake_responses (client_id, coach_id, answers, submitted_at) values
+    ('00000000-0000-4000-a000-000000000002', '00000000-0000-4000-a000-000000000001',
+     '{"goal": "Lose 5 kg and get stronger", "height": "168", "experience": "2",
+       "injuries": "Old left knee sprain", "days": "4", "diet": "Mostly vegetarian"}',
+     now() - interval '70 days');
 
 -- Two weeks of check-ins for Anna (last week reviewed, this week waiting)
 insert into public.checkins (client_id, coach_id, week_start, weight, body_fat, measurements, answers, status, coach_feedback, reviewed_at)
@@ -225,3 +241,58 @@ begin
           and (abs(hashtext(si.id::text || v_day::text)) % 10) < 8;
     end loop;
 end $$;
+
+-- Logged sets for those workouts, with a steady 2.5 kg a week of progressive overload,
+-- so the strength charts have a trend.
+insert into public.set_logs (log_id, workout_exercise_id, exercise_id, set_no, reps, weight)
+-- Start loads per exercise; isolation lifts progress by a smaller step, timed holds are skipped.
+select l.id, we.id, we.exercise_id, s.n, 8 + (s.n % 2),
+       start.kg + start.step * floor((l.performed_at::date - (current_date - 70)) / 7.0)
+from public.workout_logs l
+join public.workout_exercises we on we.day_id = l.workout_day_id
+join public.exercises e on e.id = we.exercise_id
+cross join lateral (
+    select case
+               when e.name ilike '%squat%' then 50
+               when e.name ilike '%deadlift%' then 50
+               when e.name ilike '%bench%' then 35
+               when e.name ilike '%row%' then 30
+               when e.name ilike '%press%' then 25
+               when e.name ilike '%lunge%' then 12
+               else 6
+           end::numeric as kg,
+           case when e.name ilike any (array['%raise%', '%curl%', '%extension%', '%fly%', '%pull-up%', '%chin-up%']) then 0.5 else 2.5 end::numeric as step
+) as start
+cross join generate_series(1, least(we.sets, 4)) as s(n)
+where l.client_id = '00000000-0000-4000-a000-000000000002'
+  and not (e.name ilike any (array['%plank%', '%hold%', '%carry%']));
+
+-- Eight earlier, reviewed check-ins, so weight and measurements show a trend.
+insert into public.checkins (client_id, coach_id, week_start, weight, body_fat, measurements, answers, status, coach_feedback, submitted_at, reviewed_at)
+select '00000000-0000-4000-a000-000000000002', '00000000-0000-4000-a000-000000000001',
+       date_trunc('week', current_date)::date - 7 * w,
+       round((64.8 + 0.45 * (w - 1) + ((w % 3) - 1) * 0.2)::numeric, 1),
+       round((24.5 + 0.3 * (w - 1))::numeric, 1),
+       jsonb_build_object('waist', 72 + 0.5 * (w - 1), 'hips', 98 + 0.4 * (w - 1), 'chest', 90 + 0.1 * (w - 1)),
+       jsonb_build_object('energy', (3 + w % 2)::text, 'sleep', (3 + (w + 1) % 2)::text, 'adherence', 'yes',
+                          'steps', (7500 + 150 * (9 - w))::text, 'wins', 'Steady week.'),
+       'reviewed', 'Good week, keep going.',
+       date_trunc('week', current_date) - make_interval(days => 7 * w - 1),
+       date_trunc('week', current_date) - make_interval(days => 7 * w - 2)
+from generate_series(2, 9) as w;
+
+-- The demo exercises reuse library media; give them the library's instructions and muscles too,
+-- so the client's exercise screen has steps to show. Plank has no library twin, so it's written out.
+update public.exercises e
+set instructions      = coalesce(e.instructions, lib.instructions),
+    target            = coalesce(e.target, lib.target),
+    body_part         = coalesce(e.body_part, lib.body_part),
+    secondary_muscles = coalesce(e.secondary_muscles, lib.secondary_muscles)
+from public.exercises lib
+where e.ext_id is null and e.gif_path is not null
+  and lib.ext_id is not null and lib.gif_path = e.gif_path;
+
+update public.exercises
+set instructions = E'Set your forearms on the floor, elbows under your shoulders.\nStep your feet back so your body forms a straight line from head to heels.\nBrace your stomach and squeeze your glutes; keep your hips level.\nBreathe steadily and hold for the prescribed time.',
+    target = coalesce(target, 'Abs')
+where ext_id is null and name = 'Plank' and instructions is null;

@@ -3,6 +3,7 @@ package ch.coachapp.data.repository
 import ch.coachapp.core.AppException
 import ch.coachapp.core.apiCall
 import ch.coachapp.data.model.Exercise
+import ch.coachapp.data.model.ExerciseVideo
 import ch.coachapp.data.model.Food
 import ch.coachapp.data.model.Supplement
 import io.github.jan.supabase.SupabaseClient
@@ -11,6 +12,9 @@ import io.github.jan.supabase.postgrest.from
 import io.github.jan.supabase.postgrest.postgrest
 import io.github.jan.supabase.postgrest.query.Columns
 import io.github.jan.supabase.postgrest.query.Order
+import io.github.jan.supabase.storage.storage
+import kotlin.time.Clock
+import kotlin.time.Duration.Companion.hours
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonObject
@@ -46,7 +50,19 @@ interface LibraryRepository {
     suspend fun deleteExercise(id: String): Result<Unit>
     suspend fun deleteFood(id: String): Result<Unit>
     suspend fun deleteSupplement(id: String): Result<Unit>
+
+    /** Coach: uploads a demo video for [exerciseId], replacing any previous one. */
+    suspend fun uploadExerciseVideo(exerciseId: String, bytes: ByteArray, extension: String): Result<Unit>
+
+    /** Coach: uses a link (YouTube, Vimeo, a file URL) as the demo video for [exerciseId]. */
+    suspend fun linkExerciseVideo(exerciseId: String, url: String): Result<Unit>
+    suspend fun removeExerciseVideo(exerciseId: String): Result<Unit>
+
+    /** A URL the player or browser can open: signed for uploads, as entered for links. */
+    suspend fun videoUrl(video: ExerciseVideo): Result<String>
 }
+
+const val ExerciseVideoBucket = "exercise-videos"
 
 /** Distinct values offered as filter chips above the exercise list. */
 @Serializable
@@ -58,7 +74,7 @@ data class ExerciseFacets(
 /** Everything a list row needs; `instructions` is deliberately absent. */
 private val ExerciseListColumns = Columns.list(
     "id", "coach_id", "name", "muscle_group", "equipment", "video_url",
-    "ext_id", "body_part", "target", "secondary_muscles", "image_path", "gif_path",
+    "ext_id", "body_part", "target", "secondary_muscles", "image_path", "gif_path", "exercise_videos(*)",
 )
 
 class SupabaseLibraryRepository(private val client: SupabaseClient) : LibraryRepository {
@@ -78,7 +94,7 @@ class SupabaseLibraryRepository(private val client: SupabaseClient) : LibraryRep
     }
 
     override suspend fun exercise(id: String) = apiCall {
-        client.from("exercises").select { filter { eq("id", id) } }.decodeSingle<Exercise>()
+        client.from("exercises").select(Columns.raw("*, exercise_videos(*)")) { filter { eq("id", id) } }.decodeSingle<Exercise>()
     }
 
     override suspend fun exerciseFacets() = apiCall {
@@ -141,6 +157,62 @@ class SupabaseLibraryRepository(private val client: SupabaseClient) : LibraryRep
     override suspend fun deleteExercise(id: String) = delete("exercises", id)
     override suspend fun deleteFood(id: String) = delete("foods", id)
     override suspend fun deleteSupplement(id: String) = delete("supplements", id)
+
+    override suspend fun uploadExerciseVideo(exerciseId: String, bytes: ByteArray, extension: String) = apiCall {
+        val coachId = me()
+        val previous = currentVideo(coachId, exerciseId)
+        val path = "$coachId/$exerciseId.${extension.lowercase()}"
+        client.storage.from(ExerciseVideoBucket).upload(path, bytes) { upsert = true }
+        upsertVideo(coachId, exerciseId, storagePath = path, externalUrl = null)
+        // A new file type leaves the old upload under another name.
+        previous?.storagePath?.takeIf { it != path }?.let { client.storage.from(ExerciseVideoBucket).delete(it) }
+        Unit
+    }
+
+    override suspend fun linkExerciseVideo(exerciseId: String, url: String) = apiCall {
+        val coachId = me()
+        val previous = currentVideo(coachId, exerciseId)
+        upsertVideo(coachId, exerciseId, storagePath = null, externalUrl = url.trim())
+        previous?.storagePath?.let { client.storage.from(ExerciseVideoBucket).delete(it) }
+        Unit
+    }
+
+    override suspend fun removeExerciseVideo(exerciseId: String) = apiCall {
+        val coachId = me()
+        val previous = currentVideo(coachId, exerciseId)
+        client.from("exercise_videos").delete {
+            filter {
+                eq("coach_id", coachId)
+                eq("exercise_id", exerciseId)
+            }
+        }
+        previous?.storagePath?.let { client.storage.from(ExerciseVideoBucket).delete(it) }
+        Unit
+    }
+
+    override suspend fun videoUrl(video: ExerciseVideo) = apiCall {
+        video.storagePath?.let { client.storage.from(ExerciseVideoBucket).createSignedUrl(it, 2.hours) }
+            ?: video.externalUrl
+            ?: throw AppException("This video has no source")
+    }
+
+    private suspend fun currentVideo(coachId: String, exerciseId: String): ExerciseVideo? =
+        client.from("exercise_videos").select {
+            filter {
+                eq("coach_id", coachId)
+                eq("exercise_id", exerciseId)
+            }
+        }.decodeSingleOrNull<ExerciseVideo>()
+
+    private suspend fun upsertVideo(coachId: String, exerciseId: String, storagePath: String?, externalUrl: String?) {
+        client.from("exercise_videos").upsert(buildJsonObject {
+            put("coach_id", coachId)
+            put("exercise_id", exerciseId)
+            put("storage_path", storagePath)
+            put("external_url", externalUrl)
+            put("updated_at", Clock.System.now().toString())
+        }) { onConflict = "coach_id,exercise_id" }
+    }
 
     private suspend fun delete(table: String, id: String) = apiCall {
         client.from(table).delete { filter { eq("id", id) } }

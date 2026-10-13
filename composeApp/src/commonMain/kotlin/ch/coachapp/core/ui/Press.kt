@@ -3,6 +3,7 @@ package ch.coachapp.core.ui
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.IndicationNodeFactory
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.InteractionSource
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
@@ -11,10 +12,12 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.composed
+import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.graphics.drawscope.ContentDrawScope
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.node.DelegatableNode
 import androidx.compose.ui.node.DrawModifierNode
+import androidx.compose.ui.semantics.Role
 
 /**
  * Motion acknowledges, it does not animate. A press scales the control by a couple of percent over
@@ -54,6 +57,25 @@ fun Modifier.pressScale(
         scaleX = scale
         scaleY = scale
     }
+}
+
+/**
+ * `clickable` for a row or a tile that should not scale: while pressed it lays a faint label-tinted
+ * wash over itself, the way a [ListRow] swaps to `surface2`. Drawn on top, so it shows through
+ * whatever fill the content paints, such as a Material `ListItem`'s container.
+ */
+fun Modifier.highlightClickable(
+    enabled: Boolean = true,
+    role: Role? = Role.Button,
+    onClick: () -> Unit,
+): Modifier = composed {
+    val interaction = rememberPressInteraction()
+    val isPressed by interaction.collectIsPressedAsState()
+    val wash = LocalAppColors.current.label.copy(alpha = 0.08f)
+    drawWithContent {
+        drawContent()
+        if (isPressed) drawRect(wash)
+    }.clickable(interactionSource = interaction, indication = null, enabled = enabled, role = role, onClick = onClick)
 }
 
 /** The interaction source to hand to both `clickable` and [pressScale]. */

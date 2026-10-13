@@ -130,24 +130,27 @@ Apple's HIG rebuilt in CSS. Four rules drive it:
 4. **Motion acknowledges, it does not animate.** A press scales by 2–8% over 140ms. Ripples are off
    app-wide (`NoIndication`); `Modifier.pressScale` is what a tap looks like.
 
-- **Palette** (`core/ui/Theme.kt`, `AppColors` via `LocalAppColors`): a green accent over the iOS
-  system colours, in both themes.
+- **Palette** (`core/ui/Theme.kt`, `AppColors` via `LocalAppColors`): the brand pair Butter Yellow
+  and Royal Iris over the iOS system colours. Each theme leads with the one that reads on its ground
+  and sets the other on top, so the two swap roles between light and dark.
 
   | | dark | light |
   |---|---|---|
   | `bg` / `bgEl` | `#000000` / `#0E0E10` | `#F2F2F7` / `#F7F7FA` |
   | `surface` / `surface2` / `surface3` | `#1C1C1E` / `#2C2C2E` / `#3A3A3C` | `#FFFFFF` / `#ECECEF` / `#E3E3E8` |
   | `label` → `label4` | white at 100/60/32/18% | black at 100/60/30/16% |
-  | accent | `#30D158` | `#34C759` |
+  | accent (`acc` / `onAcc`) | Butter Yellow `#FFF275` / Royal Iris `#3A0CA3` | Royal Iris `#3A0CA3` / Butter Yellow `#FFF275` |
 
-  `onAcc` is **black in both themes**: white on the light green is 2.22:1 and fails AA for 17sp/600
-  button text, where black scores 9.46:1.
+  Measured contrast: iris on white 11.9:1, yellow on iris 10.4:1, yellow on black 18.2:1. The
+  pairings that fail (iris on a dark card 1.4:1, yellow on white 1.15:1) are never used. Status
+  green and red stay the system hues; chart series: workouts follow the accent, meals teal,
+  supplements orange (blue sat too close to the iris).
 - **Typography:** 34/28/22/17/16/15/13/12sp, negative tracking that tightens as the size grows, and
   `tnum` on every style so numbers never jitter. System font (`FontFamily.Default`) — openGym loads
   no webfont either.
 - **Shapes:** 8 / 12 / **14 (cards)** / 16 / 22dp.
 - **`ChartColors`** (via `LocalChartColors`):
-  - Workouts green, meals teal, supplements blue.
+  - Workouts follow the accent, meals teal, supplements orange.
   - Protein blue, carbs yellow, fat red.
   - Heatmap levels are opaque blends towards the accent: `lerp(surface2, acc, 30/55/78/100%)`.
 - **Charts** (`core/ui/Charts.kt`):

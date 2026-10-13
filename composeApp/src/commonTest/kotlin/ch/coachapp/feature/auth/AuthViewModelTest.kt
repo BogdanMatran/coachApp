@@ -106,4 +106,6 @@ private class FakeAuthRepository(
     override suspend fun updateName(fullName: String) = Result.success(Unit)
     override suspend fun reloadProfile() = Unit
     override suspend fun signOut() = Unit
+    override suspend fun exportData() = Result.success("{}")
+    override suspend fun deleteAccount() = Result.success(Unit)
 }

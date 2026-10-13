@@ -7,6 +7,7 @@ import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -19,6 +20,8 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
@@ -29,13 +32,16 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
+import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TextField
 import androidx.compose.material3.TextFieldDefaults
+import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -48,8 +54,14 @@ import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -104,7 +116,7 @@ fun EmptyState(title: String, body: String? = null, action: (@Composable () -> U
             Text(
                 body,
                 style = MaterialTheme.typography.labelMedium,
-                color = LocalAppColors.current.label3,
+                color = LocalAppColors.current.label2,
                 textAlign = TextAlign.Center,
             )
         }
@@ -151,6 +163,36 @@ fun InfoCard(modifier: Modifier = Modifier, content: @Composable () -> Unit) {
             .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(6.dp),
     ) { content() }
+}
+
+/**
+ * The app's card: a flat `surface` block with no padding of its own, so it drops in where a
+ * Material `Card` was. With [onClick] it scales on press like a tile; Material's card would show
+ * nothing, because ripples are off app-wide.
+ */
+@Composable
+fun AppCard(
+    modifier: Modifier = Modifier,
+    onClick: (() -> Unit)? = null,
+    content: @Composable ColumnScope.() -> Unit,
+) {
+    val interaction = rememberPressInteraction()
+    Column(
+        modifier
+            .then(if (onClick != null) Modifier.pressScale(interaction, TilePressScale) else Modifier)
+            .clip(MaterialTheme.shapes.medium)
+            .background(LocalAppColors.current.surface)
+            .then(
+                if (onClick != null) {
+                    Modifier.clickable(interactionSource = interaction, indication = null, role = Role.Button, onClick = onClick)
+                } else {
+                    Modifier
+                }
+            ),
+    ) {
+        // Material's Card sets the content colour; keep that, so a bare Text or Icon inside reads.
+        CompositionLocalProvider(LocalContentColor provides LocalAppColors.current.label) { content() }
+    }
 }
 
 @Composable
@@ -219,6 +261,8 @@ private fun AppButton(
     Row(
         modifier
             .then(if (size == ButtonSize.Default) Modifier.fillMaxWidth() else Modifier)
+            // The smaller sizes paint under 48dp; this reserves the rest as touch target.
+            .minimumInteractiveComponentSize()
             .alpha(if (enabled && !loading) 1f else 0.32f)
             .pressScale(interaction)
             .clip(size.shape())
@@ -227,6 +271,7 @@ private fun AppButton(
                 interactionSource = interaction,
                 indication = null,
                 enabled = enabled && !loading,
+                role = Role.Button,
                 onClick = onClick,
             )
             .padding(size.padding()),
@@ -290,7 +335,7 @@ fun TintedButton(
     trailingIcon: ImageVector? = null,
 ) {
     val colors = LocalAppColors.current
-    AppButton(text, onClick, colors.accSoft, colors.acc, modifier, enabled, loading, size, FontWeight.SemiBold, icon, trailingIcon)
+    AppButton(text, onClick, colors.accSoft, colors.accText, modifier, enabled, loading, size, FontWeight.SemiBold, icon, trailingIcon)
 }
 
 /** No fill and regular weight: the quiet "see all" or "cancel" affordance. */
@@ -308,7 +353,7 @@ fun GhostButton(
 ) {
     val colors = LocalAppColors.current
     AppButton(
-        text, onClick, Color.Transparent, if (dim) colors.label2 else colors.acc,
+        text, onClick, Color.Transparent, if (dim) colors.label2 else colors.accText,
         modifier, enabled, loading, size, FontWeight.Normal, icon, trailingIcon,
     )
 }
@@ -325,10 +370,10 @@ fun DangerButton(
     trailingIcon: ImageVector? = null,
 ) {
     val colors = LocalAppColors.current
-    AppButton(text, onClick, colors.red.copy(alpha = 0.15f), colors.red, modifier, enabled, loading, size, FontWeight.SemiBold, icon, trailingIcon)
+    AppButton(text, onClick, colors.red.copy(alpha = 0.15f), colors.redText, modifier, enabled, loading, size, FontWeight.SemiBold, icon, trailingIcon)
 }
 
-/** A circular icon button on the raised surface; the painted size stays small, the target is 44dp. */
+/** A circular icon button on the raised surface; the painted size stays small, the target is 48dp. */
 @Composable
 fun CircleIconButton(
     icon: ImageVector,
@@ -342,9 +387,9 @@ fun CircleIconButton(
     val interaction = rememberPressInteraction()
     Box(
         modifier
-            .size(44.dp)
+            .size(48.dp)
             .alpha(if (enabled) 1f else 0.32f)
-            .clickable(interactionSource = interaction, indication = null, enabled = enabled, onClick = onClick),
+            .clickable(interactionSource = interaction, indication = null, enabled = enabled, role = Role.Button, onClick = onClick),
         contentAlignment = Alignment.Center,
     ) {
         Box(
@@ -372,16 +417,30 @@ fun ChipRow(modifier: Modifier = Modifier, content: @Composable () -> Unit) {
     ) { content() }
 }
 
+/** Set [onCard] when the chip sits on a `surface` card, so the unselected fill steps up the ramp. */
 @Composable
-fun Chip(label: String, selected: Boolean, onClick: () -> Unit, modifier: Modifier = Modifier) {
+fun Chip(label: String, selected: Boolean, onClick: () -> Unit, modifier: Modifier = Modifier, onCard: Boolean = false) {
     val colors = LocalAppColors.current
     val interaction = rememberPressInteraction()
     Box(
         modifier
+            .minimumInteractiveComponentSize()
             .pressScale(interaction, TilePressScale)
             .clip(CircleShape)
-            .background(if (selected) colors.acc else colors.surface)
-            .clickable(interactionSource = interaction, indication = null, onClick = onClick)
+            .background(
+                when {
+                    selected -> colors.acc
+                    onCard -> colors.surface2
+                    else -> colors.surface
+                }
+            )
+            .selectable(
+                selected = selected,
+                interactionSource = interaction,
+                indication = null,
+                role = Role.Checkbox,
+                onClick = onClick,
+            )
             .padding(horizontal = 13.dp, vertical = 6.dp),
     ) {
         Text(
@@ -394,21 +453,34 @@ fun Chip(label: String, selected: Boolean, onClick: () -> Unit, modifier: Modifi
     }
 }
 
-/** A small metadata badge: muscle group, equipment, a personal best. */
+/**
+ * A small metadata badge: muscle group, equipment, a personal best, a status. [accent] marks
+ * something current or positive; [danger] something that needs attention (and wins over accent).
+ */
 @Composable
-fun Tag(text: String, modifier: Modifier = Modifier, accent: Boolean = false) {
+fun Tag(text: String, modifier: Modifier = Modifier, accent: Boolean = false, danger: Boolean = false) {
     val colors = LocalAppColors.current
     Box(
         modifier
             .clip(RoundedCornerShape(6.dp))
-            .background(if (accent) colors.accSoft else colors.surface2)
+            .background(
+                when {
+                    danger -> colors.red.copy(alpha = 0.15f)
+                    accent -> colors.accSoft
+                    else -> colors.surface2
+                }
+            )
             .padding(horizontal = 7.dp, vertical = 3.dp),
     ) {
         Text(
             text,
             style = MaterialTheme.typography.labelSmall,
             fontWeight = FontWeight.Medium,
-            color = if (accent) colors.acc else colors.label2,
+            color = when {
+                danger -> colors.redText
+                accent -> colors.accText
+                else -> colors.label2
+            },
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
         )
@@ -420,14 +492,21 @@ fun Tag(text: String, modifier: Modifier = Modifier, accent: Boolean = false) {
 /** The rounded tinted glyph square that opens a list row. */
 @Composable
 fun IconTile(icon: ImageVector, modifier: Modifier = Modifier, tint: Color? = null, contentDescription: String? = null) {
-    val colors = LocalAppColors.current
+    val fill = tint ?: LocalAppColors.current.acc
     Box(
-        modifier.size(29.dp).clip(RoundedCornerShape(7.dp)).background(tint ?: colors.acc),
+        modifier.size(29.dp).clip(RoundedCornerShape(7.dp)).background(fill),
         contentAlignment = Alignment.Center,
     ) {
-        Icon(icon, contentDescription, tint = Color.White, modifier = Modifier.size(17.dp))
+        Icon(icon, contentDescription, tint = glyphColorOn(fill), modifier = Modifier.size(17.dp))
     }
 }
+
+/**
+ * Black or white, whichever reads on [fill]. White on the light-mode green or orange is 2.2:1, under
+ * the 3:1 a meaningful glyph needs; black on them is over 9:1. 0.18 is the luminance where the two
+ * contrasts cross.
+ */
+fun glyphColorOn(fill: Color): Color = if (fill.luminance() > 0.18f) Color.Black else Color.White
 
 /** Draws the hairline that separates a row from the one above it, inset past the icon rail. */
 private fun Modifier.topHairline(color: Color, inset: Dp) = drawBehind {
@@ -463,12 +542,12 @@ fun ListRow(
             .then(if (showDivider) Modifier.topHairline(colors.sep, dividerInset) else Modifier)
             .then(
                 if (onClick != null) {
-                    Modifier.clickable(interactionSource = interaction, indication = null, onClick = onClick)
+                    Modifier.clickable(interactionSource = interaction, indication = null, role = Role.Button, onClick = onClick)
                 } else {
                     Modifier
                 }
             )
-            .heightIn(min = 46.dp)
+            .heightIn(min = 48.dp)
             .padding(horizontal = 14.dp, vertical = 11.dp),
         horizontalArrangement = Arrangement.spacedBy(12.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -478,7 +557,7 @@ fun ListRow(
             Text(
                 title,
                 style = MaterialTheme.typography.bodyLarge,
-                color = if (danger) colors.red else colors.label,
+                color = if (danger) colors.redText else colors.label,
             )
             if (subtitle != null) {
                 Text(subtitle, style = MaterialTheme.typography.labelMedium, color = colors.label2)
@@ -518,25 +597,85 @@ private fun filledFieldColors() = TextFieldDefaults.colors(
     errorIndicatorColor = Color.Transparent,
 )
 
+/**
+ * The app's text field: filled with `surface2` and no indicator line, the way [NumberField] and
+ * [DropdownField] are, rather than Material's outlined box. Takes the same arguments as
+ * `OutlinedTextField` for the ones the app uses.
+ */
+@Composable
+fun AppTextField(
+    value: String,
+    onValueChange: (String) -> Unit,
+    modifier: Modifier = Modifier,
+    enabled: Boolean = true,
+    readOnly: Boolean = false,
+    textStyle: TextStyle = MaterialTheme.typography.bodyLarge,
+    label: (@Composable () -> Unit)? = null,
+    placeholder: (@Composable () -> Unit)? = null,
+    leadingIcon: (@Composable () -> Unit)? = null,
+    trailingIcon: (@Composable () -> Unit)? = null,
+    suffix: (@Composable () -> Unit)? = null,
+    supportingText: (@Composable () -> Unit)? = null,
+    isError: Boolean = false,
+    visualTransformation: VisualTransformation = VisualTransformation.None,
+    keyboardOptions: KeyboardOptions = KeyboardOptions.Default,
+    keyboardActions: KeyboardActions = KeyboardActions.Default,
+    singleLine: Boolean = false,
+    maxLines: Int = if (singleLine) 1 else Int.MAX_VALUE,
+    minLines: Int = 1,
+) {
+    TextField(
+        value = value,
+        onValueChange = onValueChange,
+        modifier = modifier,
+        enabled = enabled,
+        readOnly = readOnly,
+        textStyle = textStyle,
+        label = label,
+        placeholder = placeholder,
+        leadingIcon = leadingIcon,
+        trailingIcon = trailingIcon,
+        suffix = suffix,
+        supportingText = supportingText,
+        isError = isError,
+        visualTransformation = visualTransformation,
+        keyboardOptions = keyboardOptions,
+        keyboardActions = keyboardActions,
+        singleLine = singleLine,
+        maxLines = maxLines,
+        minLines = minLines,
+        shape = MaterialTheme.shapes.small,
+        colors = filledFieldColors(),
+    )
+}
+
+/**
+ * A numeric field. Pass [label] for a stand-alone field; in a grid under a header row, leave it
+ * null, show the hint as [placeholder] and name the cell for screen readers with
+ * [accessibilityLabel].
+ */
 @Composable
 fun NumberField(
     value: String,
     onValueChange: (String) -> Unit,
-    label: String,
+    label: String?,
     modifier: Modifier = Modifier,
     decimal: Boolean = true,
     suffix: String? = null,
+    placeholder: String? = null,
+    accessibilityLabel: String? = null,
 ) {
     TextField(
         value = value,
         onValueChange = { input -> onValueChange(input.filter { it.isDigit() || (decimal && (it == '.' || it == ',')) }) },
-        label = { Text(label) },
+        label = label?.let { { Text(it) } },
+        placeholder = placeholder?.let { { Text(it, color = LocalAppColors.current.label2) } },
         singleLine = true,
         suffix = suffix?.let { { Text(it) } },
         shape = MaterialTheme.shapes.small,
         colors = filledFieldColors(),
         keyboardOptions = KeyboardOptions(keyboardType = if (decimal) KeyboardType.Decimal else KeyboardType.Number),
-        modifier = modifier,
+        modifier = if (accessibilityLabel != null) modifier.semantics { contentDescription = accessibilityLabel } else modifier,
     )
 }
 
@@ -551,13 +690,15 @@ fun <T> DropdownField(
 ) {
     val colors = LocalAppColors.current
     var expanded by remember { mutableStateOf(false) }
+    val interaction = rememberPressInteraction()
+    val pressed by interaction.collectIsPressedAsState()
     Box(modifier) {
         Row(
             Modifier
                 .fillMaxWidth()
                 .clip(MaterialTheme.shapes.small)
-                .background(colors.surface2)
-                .clickable(indication = null, interactionSource = rememberPressInteraction()) { expanded = true }
+                .background(if (pressed) colors.surface3 else colors.surface2)
+                .clickable(indication = null, interactionSource = interaction, role = Role.DropdownList) { expanded = true }
                 .padding(horizontal = 14.dp, vertical = 9.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
@@ -575,16 +716,29 @@ fun <T> DropdownField(
     }
 }
 
+/** [destructive] paints the confirm action red; it is on by default because the default label is "Delete". */
 @Composable
-fun ConfirmDialog(title: String, text: String, confirmLabel: String = "Delete", onConfirm: () -> Unit, onDismiss: () -> Unit) {
+fun ConfirmDialog(
+    title: String,
+    text: String,
+    confirmLabel: String = "Delete",
+    destructive: Boolean = true,
+    onConfirm: () -> Unit,
+    onDismiss: () -> Unit,
+) {
+    val colors = LocalAppColors.current
     AlertDialog(
         onDismissRequest = onDismiss,
-        containerColor = LocalAppColors.current.bgEl,
+        containerColor = colors.bgEl,
         shape = MaterialTheme.shapes.large,
         title = { Text(title, style = MaterialTheme.typography.headlineSmall) },
-        text = { Text(text, style = MaterialTheme.typography.bodySmall, color = LocalAppColors.current.label2) },
-        confirmButton = { TextButton(onClick = { onConfirm(); onDismiss() }) { Text(confirmLabel) } },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel", color = LocalAppColors.current.label2) } },
+        text = { Text(text, style = MaterialTheme.typography.bodySmall, color = colors.label2) },
+        confirmButton = {
+            TextButton(onClick = { onConfirm(); onDismiss() }) {
+                Text(confirmLabel, color = if (destructive) colors.redText else colors.accText, fontWeight = FontWeight.SemiBold)
+            }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel", color = colors.label2) } },
     )
 }
 
@@ -635,7 +789,7 @@ fun TargetBar(
         if (target != null && target > 0) {
             LinearProgressIndicator(
                 progress = { (current / target).toFloat().coerceIn(0f, 1f) },
-                modifier = Modifier.fillMaxWidth().height(6.dp).padding(top = 4.dp).clip(CircleShape),
+                modifier = Modifier.fillMaxWidth().padding(top = 4.dp).height(6.dp).clip(CircleShape),
                 color = color,
                 trackColor = LocalChartColors.current.track,
                 strokeCap = StrokeCap.Round,
@@ -647,3 +801,20 @@ fun TargetBar(
 }
 
 data class NavItem(val label: String, val icon: ImageVector)
+
+/**
+ * Makes one row of a [GroupedList]-style block inside a lazy list, where the rows are separate
+ * items: the `surface` fill, with the block's top corners on the first row and its bottom corners
+ * on the last.
+ */
+@Composable
+fun Modifier.groupedRow(index: Int, count: Int): Modifier {
+    val radius = 14.dp
+    val shape = RoundedCornerShape(
+        topStart = if (index == 0) radius else 0.dp,
+        topEnd = if (index == 0) radius else 0.dp,
+        bottomStart = if (index == count - 1) radius else 0.dp,
+        bottomEnd = if (index == count - 1) radius else 0.dp,
+    )
+    return this.clip(shape).background(LocalAppColors.current.surface)
+}

@@ -8,8 +8,12 @@ import ch.coachapp.data.model.SupplementPlan
 import ch.coachapp.data.model.WorkoutDay
 import ch.coachapp.data.model.WorkoutPlan
 import ch.coachapp.data.repository.AuthRepository
+import ch.coachapp.data.repository.CheckinRepository
 import ch.coachapp.data.repository.LogRepository
 import ch.coachapp.data.repository.PlanRepository
+import ch.coachapp.domain.CheckinDue
+import ch.coachapp.domain.CheckinSchedule
+import kotlin.time.Instant
 import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -17,6 +21,10 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.datetime.LocalDate
+import kotlinx.datetime.TimeZone
+import kotlinx.datetime.toLocalDateTime
+
+data class CelebrationMessage(val title: String, val subtitle: String?)
 
 data class TodayUiState(
     val loading: Boolean = true,
@@ -33,6 +41,12 @@ data class TodayUiState(
     val supplementsTaken: Set<String> = emptySet(),
     /** Workouts logged since Monday, for the weekly ring. */
     val workoutsThisWeek: Int = 0,
+    /** This week's check-in; null until loaded. */
+    val checkinDue: CheckinDue? = null,
+    /** A workout was logged today, so the Start workout call to action steps back. */
+    val workoutDoneToday: Boolean = false,
+    /** A finished goal waiting to be celebrated; cleared once the overlay has run. */
+    val celebration: CelebrationMessage? = null,
     val message: String? = null,
 ) {
     val mealsDoneCount: Int get() = mealPlan?.meals?.count { it.id in mealsDone } ?: 0
@@ -47,6 +61,7 @@ class TodayViewModel(
     private val auth: AuthRepository,
     private val plans: PlanRepository,
     private val logs: LogRepository,
+    private val checkins: CheckinRepository,
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(TodayUiState())
@@ -64,6 +79,7 @@ class TodayViewModel(
             val history = async { logs.workoutHistory(clientId, limit = 10) }
             val mealLogs = async { logs.mealLogs(clientId, today, today) }
             val supplementLogs = async { logs.supplementLogs(clientId, today, today) }
+            val schedule = async { checkins.schedule(clientId, Dates.weekStart(today)) }
 
             val result = runCatching {
                 val workoutPlan = workout.await().getOrThrow()
@@ -82,6 +98,14 @@ class TodayViewModel(
                     supplementsTaken = supplementLogs.await().getOrThrow().filter { it.taken }.map { it.supplementItemId }.toSet(),
                     // ISO dates compare correctly as strings.
                     workoutsThisWeek = recent.count { it.performedAt.take(10) >= weekStart },
+                    workoutDoneToday = recent.any { log ->
+                        runCatching { Instant.parse(log.performedAt).toLocalDateTime(TimeZone.currentSystemDefault()).date == today }
+                            .getOrDefault(false)
+                    },
+                    // Optional: a failed lookup just hides the banner.
+                    checkinDue = schedule.await().getOrNull()?.let {
+                        CheckinSchedule.status(today, it.checkinDay, it.submittedThisWeek, it.joinedOn)
+                    },
                 )
             }
             result
@@ -94,7 +118,15 @@ class TodayViewModel(
 
     fun toggleMeal(mealId: String) {
         val done = mealId !in _state.value.mealsDone
-        _state.update { it.copy(mealsDone = it.mealsDone.toggle(mealId, done)) }
+        _state.update { s ->
+            val updated = s.copy(mealsDone = s.mealsDone.toggle(mealId, done))
+            val total = s.mealPlan?.meals?.size ?: 0
+            if (done && total > 0 && updated.mealsDoneCount == total) {
+                updated.copy(celebration = CelebrationMessage("All meals done", "That's every meal on your plan for today."))
+            } else {
+                updated
+            }
+        }
         viewModelScope.launch {
             logs.setMealDone(mealId, _state.value.date, done).onFailure { e ->
                 _state.update { it.copy(mealsDone = it.mealsDone.toggle(mealId, !done), message = e.message) }
@@ -104,7 +136,15 @@ class TodayViewModel(
 
     fun toggleSupplement(itemId: String) {
         val taken = itemId !in _state.value.supplementsTaken
-        _state.update { it.copy(supplementsTaken = it.supplementsTaken.toggle(itemId, taken)) }
+        _state.update { s ->
+            val updated = s.copy(supplementsTaken = s.supplementsTaken.toggle(itemId, taken))
+            val total = s.supplementPlan?.items?.size ?: 0
+            if (taken && total > 0 && updated.supplementsTakenCount == total) {
+                updated.copy(celebration = CelebrationMessage("Supplements done", "Everything for today is taken."))
+            } else {
+                updated
+            }
+        }
         viewModelScope.launch {
             logs.setSupplementTaken(itemId, _state.value.date, taken).onFailure { e ->
                 _state.update { it.copy(supplementsTaken = it.supplementsTaken.toggle(itemId, !taken), message = e.message) }
@@ -113,6 +153,8 @@ class TodayViewModel(
     }
 
     fun messageShown() = _state.update { it.copy(message = null) }
+
+    fun celebrationShown() = _state.update { it.copy(celebration = null) }
 
     private fun Set<String>.toggle(id: String, add: Boolean) = if (add) this + id else this - id
 

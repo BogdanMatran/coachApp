@@ -1,6 +1,7 @@
 package ch.coachapp.feature.client.checkin
 
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
@@ -15,6 +16,7 @@ import ch.coachapp.core.ui.BackTopBar
 import ch.coachapp.core.ui.Centered
 import ch.coachapp.core.ui.ErrorBox
 import ch.coachapp.core.ui.LoadingBox
+import ch.coachapp.core.ui.underBarsInset
 import org.koin.compose.viewmodel.koinViewModel
 import org.koin.core.parameter.parametersOf
 
@@ -30,7 +32,10 @@ fun CheckinDetailRoute(
 
 @Composable
 fun CheckinDetailScreen(state: CheckinDetailUiState, onBack: () -> Unit, onRetry: () -> Unit) {
-    Scaffold(topBar = { BackTopBar("Check-in", onBack) }) { padding ->
+    Scaffold(
+        topBar = { BackTopBar("Check-in", onBack) },
+        contentWindowInsets = WindowInsets(0, 0, 0, 0),
+    ) { padding ->
         Box(Modifier.fillMaxSize().padding(padding)) {
             val checkin = state.checkin
             when {
@@ -43,7 +48,8 @@ fun CheckinDetailScreen(state: CheckinDetailUiState, onBack: () -> Unit, onRetry
                         questions = state.questions,
                         photoUrls = state.photoUrls,
                         previousPhotoUrls = state.previousPhotoUrls,
-                        modifier = Modifier.verticalScroll(rememberScrollState()).padding(16.dp),
+                        modifier = Modifier.verticalScroll(rememberScrollState())
+                            .padding(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 16.dp + underBarsInset()),
                     )
                 }
             }

@@ -1,19 +1,23 @@
 package ch.coachapp.core.ui
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationRail
@@ -30,11 +34,13 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.drawBehind
-import androidx.compose.ui.layout.onSizeChanged
-import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
@@ -57,6 +63,14 @@ val LocalBottomBarHeight = staticCompositionLocalOf { 0.dp }
 /** The space a scrollable should leave at its bottom for the navigation bar. */
 @Composable
 fun bottomBarInset(): Dp = LocalBottomBarHeight.current
+
+/**
+ * Bottom padding for a pushed screen whose content runs to the bottom edge: over the iOS tab bar
+ * (Swift's contentUnderTabBar), or over the Android gesture bar, whichever is there.
+ */
+@Composable
+fun underBarsInset(): Dp =
+    maxOf(bottomBarInset(), WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding())
 
 /**
  * Top-level scaffold: bottom navigation bar on phones, navigation rail on tablets and the web.
@@ -86,10 +100,12 @@ fun AdaptiveScaffold(
                             icon = { Icon(item.icon, contentDescription = null, modifier = Modifier.size(25.dp)) },
                             label = { Text(item.label, style = MaterialTheme.typography.labelSmall) },
                             colors = NavigationRailItemDefaults.colors(
-                                selectedIconColor = colors.acc,
-                                selectedTextColor = colors.acc,
-                                unselectedIconColor = colors.label3,
-                                unselectedTextColor = colors.label3,
+                                selectedIconColor = colors.accText,
+                                selectedTextColor = colors.accText,
+                                // label2, not label3: an unselected tab is still a control and its
+                                // label is still text, so it needs 4.5:1.
+                                unselectedIconColor = colors.label2,
+                                unselectedTextColor = colors.label2,
                                 // openGym tints the icon and label; there is no pill behind them.
                                 indicatorColor = Color.Transparent,
                             ),
@@ -148,21 +164,30 @@ private fun BottomBar(
                 drawLine(colors.sep, Offset(0f, 0f), Offset(size.width, 0f), strokeWidth = HairlineWidth.toPx())
             }
             .windowInsetsPadding(WindowInsets.navigationBars)
-            .padding(start = 6.dp, end = 6.dp, top = 7.dp, bottom = 6.dp),
+            .padding(start = 6.dp, end = 6.dp, top = 7.dp, bottom = 6.dp)
+            .selectableGroup(),
         horizontalArrangement = Arrangement.SpaceAround,
         verticalAlignment = Alignment.Bottom,
     ) {
         items.forEachIndexed { index, item ->
             val selected = index == selectedIndex
-            val tint = if (selected) colors.acc else colors.label3
+            val tint = if (selected) colors.accText else colors.label2
+            val interaction = rememberPressInteraction()
+            val pressed by interaction.collectIsPressedAsState()
             Column(
                 Modifier
                     .weight(1f)
-                    .clickable(
-                        interactionSource = rememberPressInteraction(),
+                    .heightIn(min = 48.dp)
+                    .selectable(
+                        selected = selected,
+                        interactionSource = interaction,
                         indication = null,
+                        role = Role.Tab,
                         onClick = { onSelect(index) },
                     )
+                    .pressScale(interaction, IconPressScale)
+                    // Dims while held, so a tap on the tab that is already selected still answers.
+                    .alpha(if (pressed) 0.6f else 1f)
                     .padding(top = 3.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.spacedBy(3.dp),

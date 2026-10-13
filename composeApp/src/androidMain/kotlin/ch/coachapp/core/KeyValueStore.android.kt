@@ -15,6 +15,6 @@ private class AndroidKeyValueStore(private val prefs: SharedPreferences) : KeyVa
 actual fun rememberKeyValueStore(): KeyValueStore {
     val context = LocalContext.current
     return remember(context) {
-        AndroidKeyValueStore(context.getSharedPreferences("coachapp", Context.MODE_PRIVATE))
+        AndroidKeyValueStore(context.applicationContext.getSharedPreferences("coachapp", Context.MODE_PRIVATE))
     }
 }

@@ -17,12 +17,15 @@ import ch.coachapp.core.ui.InstallImageLoader
 import ch.coachapp.core.ui.LocalBottomBarHeight
 import ch.coachapp.core.ui.LocalNativeChrome
 import ch.coachapp.core.ui.clearFocusOnTap
+import ch.coachapp.data.model.FormKind
 import ch.coachapp.data.model.PlanKind
 import ch.coachapp.feature.auth.AuthRoute
 import ch.coachapp.feature.auth.JoinCoachScreen
 import ch.coachapp.feature.client.checkin.CheckinDetailRoute
-import ch.coachapp.feature.client.checkin.CheckinRoute
+import ch.coachapp.feature.client.checkin.CheckinFormRoute
+import ch.coachapp.feature.client.checkin.CheckinListRoute
 import ch.coachapp.feature.client.history.HistoryRoute
+import ch.coachapp.feature.client.intake.IntakeRoute
 import ch.coachapp.feature.client.plan.PlanRoute
 import ch.coachapp.feature.client.settings.ClientSettingsScreen
 import ch.coachapp.feature.client.today.TodayRoute
@@ -43,6 +46,7 @@ import ch.coachapp.feature.coach.SupplementBuilderDestination
 import ch.coachapp.feature.coach.SupplementBuilderRoute
 import ch.coachapp.feature.coach.WorkoutBuilderDestination
 import ch.coachapp.feature.coach.WorkoutBuilderRoute
+import ch.coachapp.feature.exercise.ExerciseDetailRoute
 import platform.UIKit.UIViewController
 
 /*
@@ -75,6 +79,8 @@ fun authScreen(): UIViewController = screen(null) { AuthRoute() }
 
 fun joinCoachScreen(): UIViewController = screen(null) { JoinCoachScreen() }
 
+fun intakeScreen(): UIViewController = screen(null) { IntakeRoute() }
+
 // Coach -------------------------------------------------------------------------
 
 fun coachClientsScreen(host: ScreenHost, onOpenClient: (String) -> Unit, onOpenInvites: () -> Unit): UIViewController =
@@ -88,10 +94,16 @@ fun coachLibraryScreen(host: ScreenHost): UIViewController = screen(host) { Libr
 fun coachSettingsScreen(
     host: ScreenHost,
     onOpenCheckinTemplate: () -> Unit,
+    onOpenIntakeTemplate: () -> Unit,
     onOpenInvites: () -> Unit,
     onSignOut: () -> Unit,
 ): UIViewController = screen(host) {
-    SettingsDestination(onOpenCheckinTemplate = onOpenCheckinTemplate, onOpenInvites = onOpenInvites, onSignOut = onSignOut)
+    SettingsDestination(
+        onOpenCheckinTemplate = onOpenCheckinTemplate,
+        onOpenIntakeTemplate = onOpenIntakeTemplate,
+        onOpenInvites = onOpenInvites,
+        onSignOut = onSignOut,
+    )
 }
 
 fun coachInvitesScreen(host: ScreenHost, onBack: () -> Unit): UIViewController =
@@ -124,23 +136,37 @@ fun coachBuilderScreen(host: ScreenHost, kind: String, planId: String?, clientId
 fun coachCheckinTemplateScreen(host: ScreenHost, onBack: () -> Unit): UIViewController =
     screen(host) { CheckinTemplateDestination(onBack = onBack) }
 
+fun coachIntakeTemplateScreen(host: ScreenHost, onBack: () -> Unit): UIViewController =
+    screen(host) { CheckinTemplateDestination(onBack = onBack, kind = FormKind.Intake) }
+
 fun coachCheckinReviewScreen(host: ScreenHost, checkinId: String, onBack: () -> Unit): UIViewController =
     screen(host) { CheckinReviewDestination(CheckinReviewRoute(checkinId), onBack = onBack) }
 
 // Client ------------------------------------------------------------------------
 
-fun clientTodayScreen(host: ScreenHost, onStartWorkout: (String) -> Unit): UIViewController =
-    screen(host) { TodayRoute(onStartWorkout = onStartWorkout) }
+fun clientTodayScreen(host: ScreenHost, onStartWorkout: (String) -> Unit, onOpenCheckin: () -> Unit): UIViewController =
+    screen(host) { TodayRoute(onStartWorkout = onStartWorkout, onOpenCheckin = onOpenCheckin) }
 
-fun clientPlanScreen(host: ScreenHost): UIViewController = screen(host) { PlanRoute() }
+fun clientPlanScreen(host: ScreenHost, onOpenExercise: (String) -> Unit): UIViewController =
+    screen(host) { PlanRoute(onOpenExercise = onOpenExercise) }
 
-fun clientCheckinScreen(host: ScreenHost): UIViewController = screen(host) { CheckinRoute() }
+fun clientExerciseDetailScreen(host: ScreenHost, workoutExerciseId: String, onBack: () -> Unit): UIViewController =
+    screen(host) { ExerciseDetailRoute(workoutExerciseId = workoutExerciseId, onBack = onBack) }
 
-fun clientHistoryScreen(host: ScreenHost, onOpenCheckin: (String) -> Unit): UIViewController =
-    screen(host) { HistoryRoute(onOpenCheckin = onOpenCheckin) }
+fun clientCheckinScreen(host: ScreenHost, onOpenForm: () -> Unit, onOpenCheckin: (String) -> Unit): UIViewController =
+    screen(host) { CheckinListRoute(onOpenForm = onOpenForm, onOpenCheckin = onOpenCheckin) }
 
-fun clientWorkoutSessionScreen(host: ScreenHost, dayId: String, onDone: () -> Unit): UIViewController =
-    screen(host) { WorkoutSessionRoute(dayId = dayId, onDone = onDone) }
+fun clientCheckinFormScreen(host: ScreenHost, onBack: () -> Unit, onDone: () -> Unit): UIViewController =
+    screen(host) { CheckinFormRoute(onBack = onBack, onDone = onDone) }
+
+fun clientHistoryScreen(host: ScreenHost): UIViewController = screen(host) { HistoryRoute() }
+
+fun clientWorkoutSessionScreen(
+    host: ScreenHost,
+    dayId: String,
+    onDone: () -> Unit,
+    onOpenExercise: (String) -> Unit,
+): UIViewController = screen(host) { WorkoutSessionRoute(dayId = dayId, onDone = onDone, onOpenExercise = onOpenExercise) }
 
 fun clientSettingsScreen(
     host: ScreenHost,

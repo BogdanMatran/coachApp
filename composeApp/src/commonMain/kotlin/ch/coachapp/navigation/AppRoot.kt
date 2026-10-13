@@ -22,6 +22,7 @@ import ch.coachapp.data.repository.AuthState
 import ch.coachapp.feature.auth.AuthRoute
 import ch.coachapp.feature.auth.JoinCoachScreen
 import ch.coachapp.feature.client.ClientApp
+import ch.coachapp.feature.client.intake.IntakeRoute
 import ch.coachapp.feature.coach.CoachApp
 import kotlinx.coroutines.launch
 import org.koin.compose.koinInject
@@ -45,6 +46,7 @@ fun AppRoot(auth: AuthRepository = koinInject()) {
                 when {
                     s.profile.role == Role.Coach -> CoachApp(profile = s.profile, onSignOut = onSignOut)
                     s.profile.coachId == null -> JoinCoachScreen()
+                    s.intakePending -> IntakeRoute()
                     else -> ClientApp(profile = s.profile, onSignOut = onSignOut)
                 }
             }

@@ -15,12 +15,9 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
-import androidx.compose.material3.Card
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -36,6 +33,9 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
+import ch.coachapp.core.ui.NeutralButton
+import ch.coachapp.core.ui.AppCard
+import ch.coachapp.core.ui.AppTextField
 import ch.coachapp.core.ui.BackTopBar
 import ch.coachapp.core.ui.BarAction
 import ch.coachapp.core.ui.Centered
@@ -175,15 +175,15 @@ fun SupplementBuilderScreen(state: SupplementBuilderUiState, actions: Supplement
                     item {
                         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                             state.saveError?.let { Text(it, color = MaterialTheme.colorScheme.error) }
-                            OutlinedTextField(draft.name, actions::setName, label = { Text("Plan name") }, singleLine = true, modifier = Modifier.fillMaxWidth())
-                            OutlinedTextField(draft.notes, actions::setNotes, label = { Text("Notes for the client") }, modifier = Modifier.fillMaxWidth())
+                            AppTextField(draft.name, actions::setName, label = { Text("Plan name") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                            AppTextField(draft.notes, actions::setNotes, label = { Text("Notes for the client") }, modifier = Modifier.fillMaxWidth())
                         }
                     }
                     if (draft.items.isEmpty()) {
                         item { EmptyState("No supplements yet", "Add items from your supplement library.") }
                     }
                     itemsIndexed(draft.items, key = { _, item -> item.key }) { index, item ->
-                        Card(Modifier.fillMaxWidth()) {
+                        AppCard(Modifier.fillMaxWidth()) {
                             Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                                 Row(verticalAlignment = Alignment.CenterVertically) {
                                     Text(item.supplement.name, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
@@ -192,18 +192,15 @@ fun SupplementBuilderScreen(state: SupplementBuilderUiState, actions: Supplement
                                     IconButton(onClick = { actions.removeItem(item.key) }) { Icon(Icons.Default.Delete, "Remove") }
                                 }
                                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                                    OutlinedTextField(item.dosage, { actions.setDosage(item.key, it) }, label = { Text("Dosage") }, singleLine = true, modifier = Modifier.weight(1f))
+                                    AppTextField(item.dosage, { actions.setDosage(item.key, it) }, label = { Text("Dosage") }, singleLine = true, modifier = Modifier.weight(1f))
                                     DropdownField("Timing", item.timing, SupplementTiming.entries, { it.label }, { actions.setTiming(item.key, it) }, Modifier.weight(1f))
                                 }
-                                OutlinedTextField(item.notes, { actions.setItemNotes(item.key, it) }, label = { Text("Notes") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                                AppTextField(item.notes, { actions.setItemNotes(item.key, it) }, label = { Text("Notes") }, singleLine = true, modifier = Modifier.fillMaxWidth())
                             }
                         }
                     }
                     item {
-                        OutlinedButton(onClick = { picking = true }, modifier = Modifier.fillMaxWidth()) {
-                            Icon(Icons.Default.Add, contentDescription = null)
-                            Text("Add supplement")
-                        }
+                        NeutralButton("Add supplement", { picking = true }, icon = Icons.Default.Add)
                     }
                 }
             }

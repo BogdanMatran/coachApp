@@ -6,6 +6,7 @@ import ch.coachapp.data.model.MealPlan
 import ch.coachapp.data.model.PlanKind
 import ch.coachapp.data.model.PlanSummary
 import ch.coachapp.data.model.SupplementPlan
+import ch.coachapp.data.model.WorkoutExercise
 import ch.coachapp.data.model.WorkoutPlan
 import ch.coachapp.domain.MealPlanDraft
 import ch.coachapp.domain.SupplementPlanDraft
@@ -26,6 +27,9 @@ interface PlanRepository {
     suspend fun clientPlans(kind: PlanKind, clientId: String): Result<List<PlanSummary>>
 
     suspend fun workoutPlan(id: String): Result<WorkoutPlan>
+
+    /** One exercise of a plan, with the full exercise row (instructions, coach video). */
+    suspend fun workoutExercise(id: String): Result<WorkoutExercise>
     suspend fun mealPlan(id: String): Result<MealPlan>
     suspend fun supplementPlan(id: String): Result<SupplementPlan>
 
@@ -50,7 +54,7 @@ val PlanKind.table: String
         PlanKind.Supplement -> "supplement_plans"
     }
 
-private val WorkoutColumns = Columns.raw("*, workout_days(*, workout_exercises(*, exercises(*)))")
+private val WorkoutColumns = Columns.raw("*, workout_days(*, workout_exercises(*, exercises(*, exercise_videos(*))))")
 private val MealColumns = Columns.raw("*, meals(*, meal_items(*, foods(*)))")
 private val SupplementColumns = Columns.raw("*, supplement_items(*, supplements(*))")
 private val SummaryColumns = Columns.list("id", "name", "client_id", "active", "updated_at")
@@ -74,6 +78,12 @@ class SupabasePlanRepository(private val client: SupabaseClient) : PlanRepositor
             filter { eq("client_id", clientId) }
             order("updated_at", Order.DESCENDING)
         }.decodeList<PlanSummary>()
+    }
+
+    override suspend fun workoutExercise(id: String) = apiCall {
+        client.from("workout_exercises").select(Columns.raw("*, exercises(*, exercise_videos(*))")) {
+            filter { eq("id", id) }
+        }.decodeSingle<WorkoutExercise>()
     }
 
     override suspend fun workoutPlan(id: String) = apiCall {

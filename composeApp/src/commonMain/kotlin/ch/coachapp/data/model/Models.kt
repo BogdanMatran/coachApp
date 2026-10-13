@@ -16,6 +16,10 @@ data class Profile(
     @SerialName("avatar_url") val avatarUrl: String? = null,
     @SerialName("coach_id") val coachId: String? = null,
     val units: String = "metric",
+    /** IANA zone the server uses for this user's day boundaries; synced from the device. */
+    val timezone: String = "UTC",
+    /** ISO weekday (1 = Monday) the coach expects this client's check-in on. */
+    @SerialName("checkin_day") val checkinDay: Int = 1,
 ) {
     val displayName: String get() = fullName.ifBlank { email ?: "Unnamed" }
 }
@@ -41,6 +45,8 @@ data class ClientOverview(
     @SerialName("pending_reviews") val pendingReviews: Int = 0,
     @SerialName("last_workout") val lastWorkout: String? = null,
     @SerialName("adherence_7d") val adherence7d: Int? = null,
+    @SerialName("checkin_day") val checkinDay: Int = 1,
+    @SerialName("checkin_overdue") val checkinOverdue: Boolean = false,
 ) {
     val displayName: String get() = fullName.ifBlank { email ?: "Unnamed" }
 }
@@ -66,12 +72,35 @@ data class Exercise(
     /** Filenames inside the `exercise-media` bucket; resolve them with `exerciseMediaUrl`. */
     @SerialName("image_path") val imagePath: String? = null,
     @SerialName("gif_path") val gifPath: String? = null,
+    /** The viewing coach's (or the client's coach's) own video, if any; RLS returns at most one. */
+    @SerialName("exercise_videos") val customVideos: List<ExerciseVideo> = emptyList(),
 ) {
     val isGlobal: Boolean get() = coachId == null
+
+    /** The coach's video wins over the library media; a coach's own exercise may carry a plain link. */
+    val customVideo: ExerciseVideo?
+        get() = customVideos.firstOrNull()
+            ?: videoUrl?.takeIf { it.isNotBlank() }?.let { ExerciseVideo(exerciseId = id, externalUrl = it) }
 
     /** The chips shown under an exercise name: what it trains and what it needs. */
     val attributes: List<String> get() = listOfNotNull(muscleGroup, equipment)
 }
+
+/** A coach's demo video for an exercise: an uploaded file or a link. */
+@Serializable
+data class ExerciseVideo(
+    @SerialName("coach_id") val coachId: String = "",
+    @SerialName("exercise_id") val exerciseId: String,
+    @SerialName("storage_path") val storagePath: String? = null,
+    @SerialName("external_url") val externalUrl: String? = null,
+) {
+    /** Uploads and direct file links play in the app; YouTube and the like open outside it. */
+    val playsInApp: Boolean
+        get() = storagePath != null ||
+            externalUrl?.substringBefore('?')?.lowercase()?.let { url -> VideoExtensions.any { url.endsWith(".$it") } } == true
+}
+
+val VideoExtensions = listOf("mp4", "mov", "m4v", "webm")
 
 @Serializable
 data class Food(
@@ -312,11 +341,28 @@ enum class QuestionType(val label: String) {
 @Serializable
 data class CheckinQuestion(val id: String, val label: String, val type: QuestionType = QuestionType.Text)
 
+/** The two questionnaires a coach writes: the weekly check-in and the one-off onboarding form. */
+@Serializable
+enum class FormKind(val title: String) {
+    @SerialName("checkin") Checkin("Check-in questions"),
+    @SerialName("intake") Intake("Onboarding form"),
+}
+
 @Serializable
 data class CheckinTemplate(
     val id: String = "",
     @SerialName("coach_id") val coachId: String,
+    val kind: FormKind = FormKind.Checkin,
     val questions: List<CheckinQuestion> = emptyList(),
+)
+
+/** A client's answers to their coach's onboarding form. */
+@Serializable
+data class IntakeResponse(
+    @SerialName("client_id") val clientId: String,
+    @SerialName("coach_id") val coachId: String,
+    val answers: Map<String, String> = emptyMap(),
+    @SerialName("submitted_at") val submittedAt: String? = null,
 )
 
 @Serializable
@@ -365,4 +411,15 @@ data class DayActivity(
     val supplements: Int = 0,
     @SerialName("planned_meals") val plannedMeals: Int = 0,
     @SerialName("planned_supplements") val plannedSupplements: Int = 0,
+)
+
+/** Best estimated one-rep max for an exercise on one day (see `strength_progress`). */
+@Serializable
+data class StrengthPoint(
+    @SerialName("exercise_id") val exerciseId: String,
+    @SerialName("exercise_name") val exerciseName: String,
+    val day: LocalDate,
+    val e1rm: Double,
+    val weight: Double,
+    val reps: Int,
 )

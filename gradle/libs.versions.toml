@@ -19,6 +19,7 @@ ktor = "3.6.0"
 supabase = "3.8.0"
 coil = "3.6.3"
 filekit = "0.16.0"
+composemediaplayer = "0.11.4"
 
 [libraries]
 compose-runtime = { module = "org.jetbrains.compose.runtime:runtime", version.ref = "compose-multiplatform" }
@@ -54,6 +55,7 @@ coil-network-ktor = { module = "io.coil-kt.coil3:coil-network-ktor3", version.re
 # Android only: Coil publishes coil-gif as an .aar with no Kotlin/Native or wasm variants.
 coil-gif = { module = "io.coil-kt.coil3:coil-gif", version.ref = "coil" }
 filekit-dialogs-compose = { module = "io.github.vinceglb:filekit-dialogs-compose", version.ref = "filekit" }
+composemediaplayer = { module = "io.github.kdroidfilter:composemediaplayer", version.ref = "composemediaplayer" }
 kotlin-test = { module = "org.jetbrains.kotlin:kotlin-test", version.ref = "kotlin" }
 
 [plugins]

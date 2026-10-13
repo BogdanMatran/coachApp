@@ -8,6 +8,7 @@ import ch.coachapp.data.model.Profile
 import io.github.jan.supabase.SupabaseClient
 import io.github.jan.supabase.auth.auth
 import io.github.jan.supabase.postgrest.from
+import io.github.jan.supabase.postgrest.postgrest
 import io.github.jan.supabase.postgrest.query.Order
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
@@ -19,6 +20,9 @@ interface CoachRepository {
     suspend fun invites(): Result<List<Invite>>
     suspend fun createInvite(email: String?): Result<Invite>
     suspend fun deleteInvite(id: String): Result<Unit>
+
+    /** [day] is ISO, 1 = Monday. */
+    suspend fun setCheckinDay(clientId: String, day: Int): Result<Unit>
 }
 
 class SupabaseCoachRepository(private val client: SupabaseClient) : CoachRepository {
@@ -52,6 +56,14 @@ class SupabaseCoachRepository(private val client: SupabaseClient) : CoachReposit
 
     override suspend fun deleteInvite(id: String) = apiCall {
         client.from("invites").delete { filter { eq("id", id) } }
+        Unit
+    }
+
+    override suspend fun setCheckinDay(clientId: String, day: Int) = apiCall {
+        client.postgrest.rpc("set_checkin_day", buildJsonObject {
+            put("p_client", clientId)
+            put("p_day", day)
+        })
         Unit
     }
 }

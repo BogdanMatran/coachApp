@@ -5,6 +5,7 @@ import ch.coachapp.core.apiCall
 import ch.coachapp.data.model.DayActivity
 import ch.coachapp.data.model.MealLog
 import ch.coachapp.data.model.SetLog
+import ch.coachapp.data.model.StrengthPoint
 import ch.coachapp.data.model.SupplementLog
 import ch.coachapp.data.model.WorkoutLog
 import io.github.jan.supabase.SupabaseClient
@@ -45,6 +46,9 @@ interface LogRepository {
 
     /** One row per day for the last [days] days, oldest first. */
     suspend fun dailyActivity(clientId: String, days: Int = 182): Result<List<DayActivity>>
+
+    /** Estimated 1RM per day for the client's most-trained exercises, oldest first. */
+    suspend fun strengthProgress(clientId: String, days: Int = 180): Result<List<StrengthPoint>>
 }
 
 private val HistoryColumns = Columns.raw("*, set_logs(*, exercises(id, name))")
@@ -145,5 +149,12 @@ class SupabaseLogRepository(private val client: SupabaseClient) : LogRepository 
             put("p_client", clientId)
             put("p_days", days)
         }).decodeList<DayActivity>()
+    }
+
+    override suspend fun strengthProgress(clientId: String, days: Int) = apiCall {
+        client.postgrest.rpc("strength_progress", buildJsonObject {
+            put("p_client", clientId)
+            put("p_days", days)
+        }).decodeList<StrengthPoint>()
     }
 }

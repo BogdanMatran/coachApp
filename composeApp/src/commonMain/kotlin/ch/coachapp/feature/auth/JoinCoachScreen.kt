@@ -9,9 +9,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -21,6 +19,9 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import ch.coachapp.core.ui.ButtonSize
+import ch.coachapp.core.ui.GhostButton
+import ch.coachapp.core.ui.AppTextField
 import ch.coachapp.core.ui.PrimaryButton
 import ch.coachapp.data.repository.AuthRepository
 import kotlinx.coroutines.launch
@@ -38,7 +39,7 @@ fun JoinCoachScreen(auth: AuthRepository = koinInject()) {
         Column(Modifier.widthIn(max = 420.dp).fillMaxWidth().padding(24.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Text("Join your coach", style = MaterialTheme.typography.headlineSmall)
             Text("Enter the invite code your coach shared with you.", color = MaterialTheme.colorScheme.onSurfaceVariant)
-            OutlinedTextField(
+            AppTextField(
                 value = code,
                 onValueChange = { code = it.uppercase().filter(Char::isLetterOrDigit).take(12) },
                 label = { Text("Invite code") },
@@ -60,9 +61,12 @@ fun JoinCoachScreen(auth: AuthRepository = koinInject()) {
                     }
                 },
             )
-            TextButton(onClick = { scope.launch { auth.signOut() } }, modifier = Modifier.align(Alignment.CenterHorizontally)) {
-                Text("Sign out")
-            }
+            GhostButton(
+                "Sign out",
+                onClick = { scope.launch { auth.signOut() } },
+                modifier = Modifier.align(Alignment.CenterHorizontally),
+                size = ButtonSize.Sm,
+            )
         }
     }
 }

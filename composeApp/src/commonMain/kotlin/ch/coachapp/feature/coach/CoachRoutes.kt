@@ -26,6 +26,9 @@ data class SupplementBuilderRoute(val planId: String? = null, val clientId: Stri
 data object CheckinTemplateRoute
 
 @Serializable
+data object IntakeTemplateRoute
+
+@Serializable
 data class CheckinReviewRoute(val checkinId: String)
 
 fun builderRoute(kind: PlanKind, planId: String? = null, clientId: String? = null): Any = when (kind) {

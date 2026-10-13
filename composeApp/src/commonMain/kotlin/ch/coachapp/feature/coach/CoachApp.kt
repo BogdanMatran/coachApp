@@ -17,6 +17,7 @@ import androidx.navigation.compose.rememberNavController
 import androidx.navigation.toRoute
 import ch.coachapp.core.ui.AdaptiveScaffold
 import ch.coachapp.core.ui.NavItem
+import ch.coachapp.data.model.FormKind
 import ch.coachapp.data.model.Profile
 import org.koin.core.module.dsl.viewModel
 import org.koin.core.module.dsl.viewModelOf
@@ -28,7 +29,7 @@ val coachFeatureModule = module {
     viewModelOf(::PlansViewModel)
     viewModelOf(::LibraryViewModel)
     viewModelOf(::SettingsViewModel)
-    viewModelOf(::CheckinTemplateViewModel)
+    viewModel { params -> CheckinTemplateViewModel(params.get(), get(), get()) }
     viewModel { params -> ClientDetailViewModel(params.get(), get(), get(), get(), get()) }
     viewModel { params -> WorkoutBuilderViewModel(params.get(), get(), get()) }
     viewModel { params -> MealBuilderViewModel(params.get(), get(), get()) }
@@ -64,6 +65,7 @@ fun CoachApp(profile: Profile, onSignOut: () -> Unit) {
         composable<MealBuilderRoute> { entry -> MealBuilderDestination(entry.toRoute(), onDone = back) }
         composable<SupplementBuilderRoute> { entry -> SupplementBuilderDestination(entry.toRoute(), onDone = back) }
         composable<CheckinTemplateRoute> { CheckinTemplateDestination(onBack = back) }
+        composable<IntakeTemplateRoute> { CheckinTemplateDestination(onBack = back, kind = FormKind.Intake) }
         composable<CheckinReviewRoute> { entry -> CheckinReviewDestination(entry.toRoute(), onBack = back) }
     }
 }
@@ -85,6 +87,7 @@ private fun CoachHome(nav: NavHostController, onSignOut: () -> Unit) {
             CoachTab.Library -> LibraryDestination()
             CoachTab.Settings -> SettingsDestination(
                 onOpenCheckinTemplate = { nav.navigate(CheckinTemplateRoute) },
+                onOpenIntakeTemplate = { nav.navigate(IntakeTemplateRoute) },
                 onOpenInvites = { nav.navigate(InvitesRoute) },
                 onSignOut = onSignOut,
             )

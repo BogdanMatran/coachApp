@@ -1,6 +1,5 @@
 package ch.coachapp.feature.coach
 
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -10,20 +9,17 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
-import androidx.compose.material3.ListItem
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -34,11 +30,16 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import ch.coachapp.core.fmt
 import ch.coachapp.core.toDoubleOrNullLenient
+import ch.coachapp.core.ui.AppTextField
 import ch.coachapp.core.ui.BarAction
+import ch.coachapp.core.ui.ButtonSize
+import ch.coachapp.core.ui.GhostButton
+import ch.coachapp.core.ui.ListRow
 import ch.coachapp.core.ui.PrimaryFab
 import ch.coachapp.core.ui.ScreenTopBar
 import ch.coachapp.core.ui.bottomBarInset
 import ch.coachapp.core.ui.clearFocusOnTap
+import ch.coachapp.core.ui.highlightClickable
 
 /**
  * Scaffold for the top-level tabs. The outer AdaptiveScaffold already handles the
@@ -75,7 +76,7 @@ fun IntField(
 ) {
     // Re-keyed on value: external changes reset the text, while a cleared field stays empty.
     var text by remember(value) { mutableStateOf(value?.toString().orEmpty()) }
-    OutlinedTextField(
+    AppTextField(
         value = text,
         onValueChange = { input ->
             text = input.filter { it.isDigit() }.take(6)
@@ -99,7 +100,7 @@ fun DecimalField(
     suffix: String? = null,
 ) {
     var text by remember(value) { mutableStateOf(value?.fmt(2).orEmpty()) }
-    OutlinedTextField(
+    AppTextField(
         value = text,
         onValueChange = { input ->
             text = input.filter { it.isDigit() || it == '.' || it == ',' }.take(8)
@@ -138,7 +139,7 @@ fun <T> LibraryPickerDialog(
         text = {
             // A dialog composes in its own window, so it needs its own tap-to-dismiss handler.
             Column(Modifier.clearFocusOnTap()) {
-                OutlinedTextField(
+                AppTextField(
                     value = query,
                     onValueChange = { query = it },
                     leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
@@ -154,19 +155,19 @@ fun <T> LibraryPickerDialog(
                     )
                 }
                 LazyColumn(Modifier.heightIn(max = 380.dp).padding(top = 8.dp)) {
-                    items(filtered) { item ->
-                        ListItem(
-                            leadingContent = itemLeading?.let { { it(item) } },
-                            headlineContent = { Text(itemLabel(item)) },
-                            supportingContent = itemSubtitle(item)?.let { { Text(it) } },
-                            modifier = Modifier.clickable { onPick(item) },
+                    itemsIndexed(filtered) { index, item ->
+                        ListRow(
+                            title = itemLabel(item),
+                            subtitle = itemSubtitle(item),
+                            leading = itemLeading?.let { { it(item) } },
+                            showDivider = index > 0,
+                            onClick = { onPick(item) },
                         )
-                        HorizontalDivider()
                     }
                 }
             }
         },
         confirmButton = {},
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Close") } },
+        dismissButton = { GhostButton("Close", onDismiss, size = ButtonSize.Sm, dim = true) },
     )
 }

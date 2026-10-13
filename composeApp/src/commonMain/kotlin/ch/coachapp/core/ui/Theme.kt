@@ -58,18 +58,24 @@ data class AppColors(
     val label4: Color,
     /** Hairline separator; draw it [HairlineWidth] thick. */
     val sep: Color,
-    /** Accent, and the label colour that sits on top of it. */
+    /** Accent (Royal Iris in light mode, Butter Yellow in dark), and the label colour on top of it. */
     val acc: Color,
     /** Accent in its pressed state. */
     val acc2: Color,
     val onAcc: Color,
-    /** Accent at 16%: tinted buttons, tags and chips. */
+    /** Accent at 10% (light) or 16% (dark): tinted buttons, tags and chips. */
     val accSoft: Color,
     /** Accent at 38%: the inset outline on a "current" card. */
     val accLine: Color,
+    /** The accent as text or a glyph on a ground; clears 4.5:1 on every surface and on [accSoft]. */
+    val accText: Color,
     val blue: Color,
     val green: Color,
     val red: Color,
+    /** [red] as text or a glyph, darkened in light mode for 4.5:1 as [accText] is. */
+    val redText: Color,
+    /** The label colour on a [red] fill. */
+    val onRed: Color,
     val orange: Color,
     val yellow: Color,
     val teal: Color,
@@ -114,9 +120,12 @@ fun lerp(start: AppColors, stop: AppColors, fraction: Float): AppColors = AppCol
     onAcc = lerp(start.onAcc, stop.onAcc, fraction),
     accSoft = lerp(start.accSoft, stop.accSoft, fraction),
     accLine = lerp(start.accLine, stop.accLine, fraction),
+    accText = lerp(start.accText, stop.accText, fraction),
     blue = lerp(start.blue, stop.blue, fraction),
     green = lerp(start.green, stop.green, fraction),
     red = lerp(start.red, stop.red, fraction),
+    redText = lerp(start.redText, stop.redText, fraction),
+    onRed = lerp(start.onRed, stop.onRed, fraction),
     orange = lerp(start.orange, stop.orange, fraction),
     yellow = lerp(start.yellow, stop.yellow, fraction),
     teal = lerp(start.teal, stop.teal, fraction),
@@ -137,9 +146,16 @@ private fun appColors(
     label3Alpha: Float,
     label4Alpha: Float,
     sep: Color,
+    acc: Color,
+    acc2: Color,
+    onAcc: Color,
+    accSoftAlpha: Float,
     blue: Color,
     green: Color,
     red: Color,
+    accText: Color,
+    redText: Color,
+    onRed: Color,
     orange: Color,
     yellow: Color,
     teal: Color,
@@ -156,22 +172,27 @@ private fun appColors(
     label3 = labelTint.copy(alpha = label3Alpha),
     label4 = labelTint.copy(alpha = label4Alpha),
     sep = sep,
-    acc = green,
-    acc2 = Color(0xFF248A3D),
-    // Black on green in both themes, by measured contrast: white on the light green is 2.22:1 and
-    // fails AA for 17sp/600 button text, where black scores 9.46:1.
-    onAcc = Color.Black,
-    accSoft = green.copy(alpha = 0.16f),
-    accLine = green.copy(alpha = 0.38f),
+    acc = acc,
+    acc2 = acc2,
+    onAcc = onAcc,
+    accSoft = acc.copy(alpha = accSoftAlpha),
+    accLine = acc.copy(alpha = 0.38f),
+    accText = accText,
     blue = blue,
     green = green,
     red = red,
+    redText = redText,
+    onRed = onRed,
     orange = orange,
     yellow = yellow,
     teal = teal,
     purple = purple,
     grey = Color(0xFF8E8E93),
 )
+
+/** The brand pair. Each theme leads with one and sets the other on top of it. */
+val ButterYellow = Color(0xFFFFF275)
+val RoyalIris = Color(0xFF3A0CA3)
 
 val DarkAppColors = appColors(
     bg = Color(0xFF000000),
@@ -186,9 +207,18 @@ val DarkAppColors = appColors(
     label3Alpha = 0.32f,
     label4Alpha = 0.18f,
     sep = Color(0xFF545458).copy(alpha = 0.60f),
+    // Dark mode leads with Butter Yellow and sets Royal Iris on it: yellow is 18:1 on black, while
+    // the iris would be 1.4:1 on a dark card and disappear.
+    acc = ButterYellow,
+    acc2 = Color(0xFFE6D85E),
+    onAcc = RoyalIris,
+    accSoftAlpha = 0.16f,
     blue = Color(0xFF0A84FF),
     green = Color(0xFF30D158),
     red = Color(0xFFFF453A),
+    accText = ButterYellow,
+    redText = Color(0xFFFF6961),
+    onRed = Color.Black,
     orange = Color(0xFFFF9F0A),
     yellow = Color(0xFFFFD60A),
     teal = Color(0xFF40C8E0),
@@ -204,13 +234,24 @@ val LightAppColors = appColors(
     thumb = Color(0xFFFFFFFF),
     label = Color(0xFF000000),
     labelTint = Color(0xFF3C3C43),
-    label2Alpha = 0.60f,
+    // 0.75 rather than the iOS 0.60: secondary text carries real content here (subtitles, values,
+    // section headers), and 0.60 measures 3.4:1 on white.
+    label2Alpha = 0.75f,
     label3Alpha = 0.30f,
     label4Alpha = 0.16f,
     sep = Color(0xFF3C3C43).copy(alpha = 0.29f),
+    // Light mode leads with Royal Iris and sets Butter Yellow on it (10.4:1); the iris is 11.9:1 on
+    // white, so it also works as text. Yellow on white is 1.15:1, so it never appears as text here.
+    acc = RoyalIris,
+    acc2 = Color(0xFF2B0880),
+    onAcc = ButterYellow,
+    accSoftAlpha = 0.10f,
     blue = Color(0xFF007AFF),
     green = Color(0xFF34C759),
     red = Color(0xFFFF3B30),
+    accText = RoyalIris,
+    redText = Color(0xFFC4000F),
+    onRed = Color.White,
     orange = Color(0xFFFF9500),
     yellow = Color(0xFFFFCC00),
     teal = Color(0xFF30B0C7),
@@ -237,7 +278,8 @@ data class ChartColors(
 private fun AppColors.toChartColors() = ChartColors(
     workouts = acc,
     meals = teal,
-    supplements = blue,
+    // Not blue: next to the Royal Iris accent the two read as one series.
+    supplements = orange,
     protein = blue,
     carbs = yellow,
     fat = red,
@@ -257,12 +299,12 @@ private fun AppColors.toColorScheme(dark: Boolean): ColorScheme =
         primary = acc,
         onPrimary = onAcc,
         primaryContainer = accSoft,
-        onPrimaryContainer = acc,
+        onPrimaryContainer = accText,
         inversePrimary = acc,
         secondary = acc,
         onSecondary = onAcc,
         secondaryContainer = accSoft,
-        onSecondaryContainer = acc,
+        onSecondaryContainer = accText,
         tertiary = blue,
         onTertiary = onAcc,
         tertiaryContainer = blue.copy(alpha = 0.16f),
@@ -277,8 +319,8 @@ private fun AppColors.toColorScheme(dark: Boolean): ColorScheme =
         surfaceTint = Color.Transparent,
         inverseSurface = label,
         inverseOnSurface = bg,
-        error = red,
-        onError = onAcc,
+        error = redText,
+        onError = onRed,
         errorContainer = red.copy(alpha = 0.15f),
         onErrorContainer = red,
         outline = label3,
@@ -343,9 +385,9 @@ private val AppShapes = Shapes(
 
 /** What the user picked in Settings. [System] follows the device. */
 enum class ThemeMode(val label: String) {
-    System("System"),
     Light("Light"),
     Dark("Dark"),
+    System("System"),
     ;
 
     companion object {
@@ -374,13 +416,32 @@ val LocalThemeController = staticCompositionLocalOf<ThemeController> {
     error("No ThemeController: wrap the content in CoachTheme")
 }
 
+/**
+ * Brings what Compose does not draw in line with the chosen mode: the system bars on Android, and
+ * on iOS the SwiftUI shell (tab bar, navigation bars, status bar). [dark] is the resolved value.
+ */
+@Composable
+internal expect fun PlatformChromeAppearance(mode: ThemeMode, dark: Boolean)
+
 /** Long enough to read as a deliberate transition, short enough not to be in the way. */
 private const val ThemeAnimationMillis = 450
 
+/**
+ * One controller per process. iOS hosts every screen in its own Compose view controller, each with
+ * its own [CoachTheme]; if each remembered its own controller, a choice made in Settings would only
+ * reach the Settings screen while every other screen kept the old mode.
+ */
+private var sharedThemeController: ThemeController? = null
+
+@Composable
+private fun rememberThemeController(): ThemeController {
+    val store = rememberKeyValueStore()
+    return remember { sharedThemeController ?: ThemeController(store).also { sharedThemeController = it } }
+}
+
 @Composable
 fun CoachTheme(content: @Composable () -> Unit) {
-    val store = rememberKeyValueStore()
-    val controller = remember(store) { ThemeController(store) }
+    val controller = rememberThemeController()
     val dark = when (controller.mode) {
         ThemeMode.System -> isSystemInDarkTheme()
         ThemeMode.Light -> false
@@ -394,6 +455,7 @@ fun CoachTheme(content: @Composable () -> Unit) {
         label = "themeMode",
     )
     val colors = lerp(LightAppColors, DarkAppColors, fraction)
+    PlatformChromeAppearance(controller.mode, dark)
     CompositionLocalProvider(
         LocalThemeController provides controller,
         LocalAppColors provides colors,

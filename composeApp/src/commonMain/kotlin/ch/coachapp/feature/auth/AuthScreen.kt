@@ -1,5 +1,6 @@
 package ch.coachapp.feature.auth
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -13,16 +14,12 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.SegmentedButton
-import androidx.compose.material3.SegmentedButtonDefaults
-import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardCapitalization
@@ -33,7 +30,12 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigationevent.NavigationEventInfo
 import androidx.navigationevent.compose.NavigationBackHandler
 import androidx.navigationevent.compose.rememberNavigationEventState
+import ch.coachapp.core.ui.AppTextField
+import ch.coachapp.core.ui.ButtonSize
+import ch.coachapp.core.ui.GhostButton
+import ch.coachapp.core.ui.LocalAppColors
 import ch.coachapp.core.ui.PrimaryButton
+import ch.coachapp.core.ui.SegmentedControl
 import org.koin.compose.viewmodel.koinViewModel
 
 @Composable
@@ -76,23 +78,21 @@ fun AuthScreen(
             Modifier.widthIn(max = 420.dp).fillMaxWidth().padding(24.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            Text("CoachApp", style = MaterialTheme.typography.headlineLarge, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+            BrandHeader(Modifier.padding(bottom = 12.dp))
             Text(
                 if (state.mode == AuthMode.SignIn) "Welcome back" else "Create your account",
-                style = MaterialTheme.typography.titleMedium,
+                style = MaterialTheme.typography.headlineSmall,
             )
 
             if (state.mode == AuthMode.SignUp) {
-                SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth()) {
-                    SignUpRole.entries.forEachIndexed { index, role ->
-                        SegmentedButton(
-                            selected = state.role == role,
-                            onClick = { onRoleChange(role) },
-                            shape = SegmentedButtonDefaults.itemShape(index, SignUpRole.entries.size),
-                        ) { Text(if (role == SignUpRole.Coach) "I'm a coach" else "I have an invite") }
-                    }
-                }
-                OutlinedTextField(
+                SegmentedControl(
+                    options = SignUpRole.entries,
+                    selected = state.role,
+                    onSelect = { onRoleChange(it) },
+                    modifier = Modifier.fillMaxWidth(),
+                    label = { role -> if (role == SignUpRole.Coach) "I'm a coach" else "I have an invite" },
+                )
+                AppTextField(
                     value = state.fullName,
                     onValueChange = onFullNameChange,
                     label = { Text("Full name") },
@@ -101,7 +101,7 @@ fun AuthScreen(
                     modifier = Modifier.fillMaxWidth(),
                 )
                 if (state.role == SignUpRole.Client) {
-                    OutlinedTextField(
+                    AppTextField(
                         value = state.inviteCode,
                         onValueChange = onInviteCodeChange,
                         label = { Text("Invite code") },
@@ -120,7 +120,7 @@ fun AuthScreen(
                 }
             }
 
-            OutlinedTextField(
+            AppTextField(
                 value = state.email,
                 onValueChange = onEmailChange,
                 label = { Text("Email") },
@@ -128,7 +128,7 @@ fun AuthScreen(
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email, imeAction = ImeAction.Next),
                 modifier = Modifier.fillMaxWidth(),
             )
-            OutlinedTextField(
+            AppTextField(
                 value = state.password,
                 onValueChange = onPasswordChange,
                 label = { Text("Password") },
@@ -140,7 +140,7 @@ fun AuthScreen(
             )
 
             state.error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
-            state.info?.let { Text(it, color = MaterialTheme.colorScheme.primary) }
+            state.info?.let { Text(it, color = LocalAppColors.current.accText) }
 
             PrimaryButton(
                 text = if (state.mode == AuthMode.SignIn) "Sign in" else "Create account",
@@ -149,12 +149,33 @@ fun AuthScreen(
                 loading = state.loading,
                 modifier = Modifier.fillMaxWidth(),
             )
-            TextButton(
+            GhostButton(
+                if (state.mode == AuthMode.SignIn) "New here? Create an account" else "Already have an account? Sign in",
                 onClick = { onModeChange(if (state.mode == AuthMode.SignIn) AuthMode.SignUp else AuthMode.SignIn) },
                 modifier = Modifier.align(Alignment.CenterHorizontally),
-            ) {
-                Text(if (state.mode == AuthMode.SignIn) "New here? Create an account" else "Already have an account? Sign in")
-            }
+                size = ButtonSize.Sm,
+            )
         }
+    }
+}
+
+/** The first impression: the brand pair as a solid block, the wordmark set in the accent's partner. */
+@Composable
+private fun BrandHeader(modifier: Modifier = Modifier) {
+    val colors = LocalAppColors.current
+    Column(
+        modifier
+            .fillMaxWidth()
+            .clip(MaterialTheme.shapes.extraLarge)
+            .background(colors.acc)
+            .padding(horizontal = 24.dp, vertical = 32.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        Text("CoachApp", style = MaterialTheme.typography.displaySmall, fontWeight = FontWeight.Bold, color = colors.onAcc)
+        Text(
+            "Your plan, your progress and your coach, in one place.",
+            style = MaterialTheme.typography.bodyLarge,
+            color = colors.onAcc.copy(alpha = 0.85f),
+        )
     }
 }

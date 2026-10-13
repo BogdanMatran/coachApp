@@ -2,19 +2,13 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
+	<key>CADisableMinimumFrameDurationOnPhone</key>
+	<true/>
 	<key>NSAppTransportSecurity</key>
 	<dict>
 		<key>NSAllowsLocalNetworking</key>
 		<true/>
 	</dict>
-	<key>NSLocalNetworkUsageDescription</key>
-	<string>Connects to the development server on your network.</string>
-	<key>NSPhotoLibraryUsageDescription</key>
-	<string>Choose progress photos for your weekly check-in.</string>
-	<key>NSCameraUsageDescription</key>
-	<string>Take progress photos for your weekly check-in.</string>
-	<key>CADisableMinimumFrameDurationOnPhone</key>
-	<true/>
 	<key>UILaunchScreen</key>
 	<dict>
 		<key>UIColorName</key>

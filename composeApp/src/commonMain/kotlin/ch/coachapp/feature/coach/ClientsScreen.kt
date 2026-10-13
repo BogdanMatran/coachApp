@@ -1,6 +1,5 @@
 package ch.coachapp.feature.coach
 
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.FlowRow
@@ -16,11 +15,8 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Email
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Search
-import androidx.compose.material3.Badge
-import androidx.compose.material3.Card
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -35,18 +31,23 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
 import ch.coachapp.core.Dates
+import ch.coachapp.core.ui.AppCard
+import ch.coachapp.core.ui.AppTextField
 import ch.coachapp.core.ui.BarAction
 import ch.coachapp.core.ui.Centered
 import ch.coachapp.core.ui.EmptyState
 import ch.coachapp.core.ui.ErrorBox
 import ch.coachapp.core.ui.LoadingBox
+import ch.coachapp.core.ui.LocalAppColors
 import ch.coachapp.core.ui.LocalChartColors
 import ch.coachapp.core.ui.PrimaryButton
 import ch.coachapp.core.ui.ProgressRing
 import ch.coachapp.core.ui.StatChip
+import ch.coachapp.core.ui.Tag
 import ch.coachapp.core.ui.bottomBarInset
 import ch.coachapp.data.model.ClientOverview
 import ch.coachapp.data.repository.CoachRepository
+import ch.coachapp.domain.CheckinSchedule
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -132,7 +133,7 @@ fun ClientsScreen(
                         }
                     }
                     item {
-                        OutlinedTextField(
+                        AppTextField(
                             value = state.query,
                             onValueChange = onQueryChange,
                             leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
@@ -152,7 +153,7 @@ fun ClientsScreen(
 
 @Composable
 private fun ClientCard(client: ClientOverview, onClick: () -> Unit) {
-    Card(Modifier.fillMaxWidth().clickable(onClick = onClick)) {
+    AppCard(Modifier.fillMaxWidth(), onClick = onClick) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
                 ProgressRing(
@@ -169,10 +170,15 @@ private fun ClientCard(client: ClientOverview, onClick: () -> Unit) {
                     client.email?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
                 }
                 if (client.pendingReviews > 0) {
-                    Badge(containerColor = MaterialTheme.colorScheme.error) {
-                        Text("${client.pendingReviews} to review", modifier = Modifier.padding(horizontal = 4.dp))
-                    }
+                    Tag("${client.pendingReviews} to review", danger = true)
                 }
+            }
+            if (client.checkinOverdue) {
+                Text(
+                    "Check-in overdue · due ${CheckinSchedule.dayName(client.checkinDay)}",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = LocalAppColors.current.redText,
+                )
             }
             FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 StatChip("Last check-in", client.lastCheckin?.let { Dates.format(it) } ?: "–")

@@ -21,6 +21,7 @@ import ch.coachapp.core.ui.DangerButton
 import ch.coachapp.core.ui.InfoCard
 import ch.coachapp.core.ui.LocalAppColors
 import ch.coachapp.core.ui.SectionHeader
+import ch.coachapp.feature.account.AccountSection
 
 /**
  * A client's own settings. Coaches have their own screen, with the coaching sections on top.
@@ -53,6 +54,8 @@ fun ClientSettingsScreen(
                         color = LocalAppColors.current.label2,
                     )
                 }
+
+                AccountSection()
 
                 DangerButton(
                     "Sign out",

@@ -1,6 +1,5 @@
 package ch.coachapp.feature.coach
 
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -12,14 +11,8 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material3.Card
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.ListItem
-import androidx.compose.material3.ListItemDefaults
-import androidx.compose.material3.SegmentedButton
-import androidx.compose.material3.SegmentedButtonDefaults
-import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -34,12 +27,16 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
 import ch.coachapp.core.Dates
+import ch.coachapp.core.ui.AppCard
 import ch.coachapp.core.ui.BarAction
 import ch.coachapp.core.ui.Centered
 import ch.coachapp.core.ui.ConfirmDialog
 import ch.coachapp.core.ui.EmptyState
 import ch.coachapp.core.ui.ErrorBox
+import ch.coachapp.core.ui.ListRow
 import ch.coachapp.core.ui.LoadingBox
+import ch.coachapp.core.ui.LocalAppColors
+import ch.coachapp.core.ui.SegmentedControl
 import ch.coachapp.core.ui.bottomBarInset
 import ch.coachapp.data.model.PlanKind
 import ch.coachapp.data.model.PlanSummary
@@ -119,15 +116,13 @@ fun PlansScreen(
     ) { padding ->
         Centered(Modifier.padding(padding)) {
             Column(Modifier.fillMaxSize()) {
-                SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth().padding(16.dp, 8.dp)) {
-                    PlanKind.entries.forEachIndexed { index, kind ->
-                        SegmentedButton(
-                            selected = state.kind == kind,
-                            onClick = { onKindChange(kind) },
-                            shape = SegmentedButtonDefaults.itemShape(index, PlanKind.entries.size),
-                        ) { Text(kind.label) }
-                    }
-                }
+                SegmentedControl(
+                    options = PlanKind.entries,
+                    selected = state.kind,
+                    onSelect = { onKindChange(it) },
+                    modifier = Modifier.fillMaxWidth().padding(16.dp, 8.dp),
+                    label = { kind -> kind.label },
+                )
                 val templates = state.current
                 when {
                     state.loading -> LoadingBox()
@@ -141,14 +136,15 @@ fun PlansScreen(
                         verticalArrangement = Arrangement.spacedBy(8.dp),
                     ) {
                         items(templates, key = { it.id }) { plan ->
-                            Card(Modifier.fillMaxWidth().clickable { onOpenBuilder(state.kind, plan.id) }) {
-                                ListItem(
-                                    headlineContent = { Text(plan.name) },
-                                    supportingContent = { Text("Updated ${Dates.formatTimestamp(plan.updatedAt)}") },
-                                    trailingContent = {
-                                        IconButton(onClick = { deleting = plan }) { Icon(Icons.Default.Delete, contentDescription = "Delete") }
+                            AppCard(Modifier.fillMaxWidth(), onClick = { onOpenBuilder(state.kind, plan.id) }) {
+                                ListRow(
+                                    title = plan.name,
+                                    subtitle = "Updated ${Dates.formatTimestamp(plan.updatedAt)}",
+                                    trailing = {
+                                        IconButton(onClick = { deleting = plan }) {
+                                            Icon(Icons.Default.Delete, contentDescription = "Delete", tint = LocalAppColors.current.label2)
+                                        }
                                     },
-                                    colors = ListItemDefaults.colors(containerColor = Color.Transparent),
                                 )
                             }
                         }

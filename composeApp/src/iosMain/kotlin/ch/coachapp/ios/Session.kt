@@ -17,7 +17,7 @@ fun setUpApp() {
 }
 
 /** Which shell the Swift root should show. */
-enum class SessionKind { Loading, SignedOut, Error, Coach, Client, JoinCoach }
+enum class SessionKind { Loading, SignedOut, Error, Coach, Client, JoinCoach, Intake }
 
 data class SessionSnapshot(
     val kind: SessionKind,
@@ -59,6 +59,7 @@ private fun AuthState.toSnapshot(): SessionSnapshot = when (this) {
         kind = when {
             profile.role == Role.Coach -> SessionKind.Coach
             profile.coachId == null -> SessionKind.JoinCoach
+            intakePending -> SessionKind.Intake
             else -> SessionKind.Client
         },
         profileId = profile.id,

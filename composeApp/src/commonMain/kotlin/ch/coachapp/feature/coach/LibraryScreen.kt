@@ -1,17 +1,17 @@
 package ch.coachapp.feature.coach
 
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -21,24 +21,18 @@ import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.ListItem
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.SegmentedButton
-import androidx.compose.material3.SegmentedButtonDefaults
-import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -47,25 +41,39 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
 import ch.coachapp.core.fmt
+import ch.coachapp.core.ui.AppTextField
 import ch.coachapp.core.ui.BarAction
+import ch.coachapp.core.ui.ButtonSize
 import ch.coachapp.core.ui.Centered
 import ch.coachapp.core.ui.Chip
 import ch.coachapp.core.ui.ChipRow
 import ch.coachapp.core.ui.ConfirmDialog
+import ch.coachapp.core.ui.DangerButton
 import ch.coachapp.core.ui.EmptyState
 import ch.coachapp.core.ui.ErrorBox
-import ch.coachapp.core.ui.ExerciseAnimation
-import ch.coachapp.core.ui.ExerciseThumb
+import ch.coachapp.core.ui.GhostButton
+import ch.coachapp.core.ui.ListRow
 import ch.coachapp.core.ui.LoadingBox
+import ch.coachapp.core.ui.LocalAppColors
+import ch.coachapp.core.ui.SegmentedControl
 import ch.coachapp.core.ui.Tag
+import ch.coachapp.core.ui.TintedButton
 import ch.coachapp.core.ui.bottomBarInset
 import ch.coachapp.core.ui.clearFocusOnTap
+import ch.coachapp.core.ui.groupedRow
+import ch.coachapp.core.ui.highlightClickable
 import ch.coachapp.data.model.Exercise
 import ch.coachapp.data.model.Food
 import ch.coachapp.data.model.Supplement
 import ch.coachapp.data.repository.ExerciseFacets
 import ch.coachapp.data.repository.ExerciseFilter
 import ch.coachapp.data.repository.LibraryRepository
+import ch.coachapp.feature.exercise.ExerciseDemo
+import ch.coachapp.feature.exercise.ExerciseThumbnail
+import io.github.vinceglb.filekit.dialogs.FileKitType
+import io.github.vinceglb.filekit.dialogs.compose.rememberFilePickerLauncher
+import io.github.vinceglb.filekit.extension
+import io.github.vinceglb.filekit.readBytes
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -76,6 +84,9 @@ import kotlinx.coroutines.launch
 import org.koin.compose.viewmodel.koinViewModel
 
 enum class LibraryTab(val label: String) { Exercises("Exercises"), Foods("Foods"), Supplements("Supplements") }
+
+/** Matches the exercise-videos bucket's file size limit. */
+private const val MaxVideoBytes = 50 * 1024 * 1024
 
 /** Rows per request. The imported library is far too large to hold in one list. */
 private const val ExercisePageSize = 60
@@ -101,8 +112,9 @@ data class LibraryUiState(
     val foods: List<Food> = emptyList(),
     val supplements: List<Supplement> = emptyList(),
     val editing: LibraryEdit? = null,
-    /** A global exercise opened read-only, to see its demo and instructions. */
+    /** An exercise opened to see its demo and instructions, and to set the coach's own video. */
     val viewing: Exercise? = null,
+    val videoBusy: Boolean = false,
     val saving: Boolean = false,
     val error: String? = null,
     val message: String? = null,
@@ -200,7 +212,7 @@ class LibraryViewModel(private val library: LibraryRepository) : ViewModel() {
     fun edit(edit: LibraryEdit) = _state.update { it.copy(editing = edit) }
     fun dismissEdit() = _state.update { it.copy(editing = null) }
 
-    /** Global exercises are read-only, so opening one fetches the full row for its instructions. */
+    /** Opening an exercise fetches the full row, for its instructions and the coach's video. */
     fun view(exercise: Exercise) {
         _state.update { it.copy(viewing = exercise) }
         viewModelScope.launch {
@@ -211,6 +223,35 @@ class LibraryViewModel(private val library: LibraryRepository) : ViewModel() {
     }
 
     fun dismissView() = _state.update { it.copy(viewing = null) }
+
+    fun uploadVideo(bytes: ByteArray, extension: String) = changeVideo("Video uploaded") { id ->
+        if (bytes.size > MaxVideoBytes) Result.failure(IllegalArgumentException("Videos can be up to 50 MB."))
+        else library.uploadExerciseVideo(id, bytes, extension)
+    }
+
+    fun linkVideo(url: String) = changeVideo("Video linked") { id -> library.linkExerciseVideo(id, url) }
+
+    fun removeVideo() = changeVideo("Video removed") { id -> library.removeExerciseVideo(id) }
+
+    private fun changeVideo(done: String, change: suspend (exerciseId: String) -> Result<Unit>) {
+        val exercise = _state.value.viewing ?: return
+        _state.update { it.copy(videoBusy = true) }
+        viewModelScope.launch {
+            change(exercise.id)
+                .onSuccess {
+                    val fresh = library.exercise(exercise.id).getOrDefault(exercise)
+                    _state.update { s ->
+                        s.copy(
+                            videoBusy = false,
+                            message = done,
+                            viewing = fresh.takeIf { s.viewing?.id == it.id } ?: s.viewing,
+                            exercises = s.exercises.map { if (it.id == fresh.id) fresh else it },
+                        )
+                    }
+                }
+                .onFailure { e -> _state.update { it.copy(videoBusy = false, message = e.message) } }
+        }
+    }
 
     fun save(edit: LibraryEdit) {
         _state.update { it.copy(saving = true) }
@@ -263,6 +304,9 @@ fun LibraryDestination(viewModel: LibraryViewModel = koinViewModel()) {
         onLoadMore = viewModel::loadMoreExercises,
         onView = viewModel::view,
         onDismissView = viewModel::dismissView,
+        onUploadVideo = viewModel::uploadVideo,
+        onLinkVideo = viewModel::linkVideo,
+        onRemoveVideo = viewModel::removeVideo,
     )
 }
 
@@ -320,6 +364,9 @@ fun LibraryScreen(
     onLoadMore: () -> Unit = {},
     onView: (Exercise) -> Unit = {},
     onDismissView: () -> Unit = {},
+    onUploadVideo: (ByteArray, String) -> Unit = { _, _ -> },
+    onLinkVideo: (String) -> Unit = {},
+    onRemoveVideo: () -> Unit = {},
 ) {
     val snackbar = remember { SnackbarHostState() }
     var deleting by remember { mutableStateOf<LibraryRow?>(null) }
@@ -334,16 +381,14 @@ fun LibraryScreen(
     ) { padding ->
         Centered(Modifier.padding(padding)) {
             Column(Modifier.fillMaxSize()) {
-                SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth().padding(16.dp, 8.dp)) {
-                    LibraryTab.entries.forEachIndexed { index, tab ->
-                        SegmentedButton(
-                            selected = state.tab == tab,
-                            onClick = { onTabChange(tab) },
-                            shape = SegmentedButtonDefaults.itemShape(index, LibraryTab.entries.size),
-                        ) { Text(tab.label) }
-                    }
-                }
-                OutlinedTextField(
+                SegmentedControl(
+                    options = LibraryTab.entries,
+                    selected = state.tab,
+                    onSelect = { onTabChange(it) },
+                    modifier = Modifier.fillMaxWidth().padding(16.dp, 8.dp),
+                    label = { tab -> tab.label },
+                )
+                AppTextField(
                     value = state.query,
                     onValueChange = onQueryChange,
                     leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
@@ -373,24 +418,32 @@ fun LibraryScreen(
                             "Add your own items with the button below."
                         },
                     )
-                    else -> LazyColumn(state = listState, contentPadding = PaddingValues(bottom = 96.dp + bottomBarInset())) {
-                        items(rows, key = { it.id }) { row ->
-                            ListItem(
-                                leadingContent = row.exercise?.let { { ExerciseThumb(it, size = 44.dp) } },
-                                headlineContent = { Text(row.title) },
-                                supportingContent = row.subtitle.takeIf { it.isNotBlank() }?.let { { Text(it) } },
-                                overlineContent = if (row.global) ({ Text("Global") }) else null,
-                                trailingContent = if (!row.global) ({
-                                    IconButton(onClick = { deleting = row }) { Icon(Icons.Default.Delete, contentDescription = "Delete") }
-                                }) else null,
-                                modifier = Modifier.clickable(
-                                    enabled = !row.global || row.exercise != null,
-                                ) {
-                                    val exercise = row.exercise
-                                    if (row.global && exercise != null) onView(exercise) else onEdit(row.edit)
+                    else -> LazyColumn(
+                        state = listState,
+                        contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 96.dp + bottomBarInset()),
+                    ) {
+                        itemsIndexed(rows, key = { _, it -> it.id }) { index, row ->
+                            ListRow(
+                                title = row.title,
+                                subtitle = row.subtitle.takeIf { it.isNotBlank() },
+                                leading = row.exercise?.let { { ExerciseThumbnail(it, size = 44.dp) } },
+                                trailing = {
+                                    if (row.global) {
+                                        Tag("Library")
+                                    } else {
+                                        IconButton(onClick = { deleting = row }) {
+                                            Icon(Icons.Default.Delete, contentDescription = "Delete", tint = LocalAppColors.current.label2)
+                                        }
+                                    }
                                 },
+                                showDivider = index > 0,
+                                dividerInset = if (row.exercise != null) 72.dp else 14.dp,
+                                onClick = if (!row.global || row.exercise != null) ({
+                                    val exercise = row.exercise
+                                    if (exercise != null) onView(exercise) else onEdit(row.edit)
+                                }) else null,
+                                modifier = Modifier.groupedRow(index, rows.size),
                             )
-                            HorizontalDivider()
                         }
                         if (state.loadingMore) {
                             item { Box(Modifier.fillMaxWidth().padding(16.dp), contentAlignment = Alignment.Center) { CircularProgressIndicator() } }
@@ -407,7 +460,17 @@ fun LibraryScreen(
         is LibraryEdit.EditSupplement -> SupplementDialog(edit.supplement, state.saving, { onSave(LibraryEdit.EditSupplement(it)) }, onDismissEdit)
         null -> Unit
     }
-    state.viewing?.let { ExerciseDetailDialog(it, onDismissView) }
+    state.viewing?.let { exercise ->
+        ExerciseDetailDialog(
+            exercise = exercise,
+            videoBusy = state.videoBusy,
+            onDismiss = onDismissView,
+            onEdit = { onDismissView(); onEdit(LibraryEdit.EditExercise(exercise)) },
+            onUploadVideo = onUploadVideo,
+            onLinkVideo = onLinkVideo,
+            onRemoveVideo = onRemoveVideo,
+        )
+    }
     deleting?.let { row ->
         ConfirmDialog(
             title = "Delete ${row.title}?",
@@ -418,18 +481,77 @@ fun LibraryScreen(
     }
 }
 
-/** A global exercise, read-only: what it looks like, what it works, and how to do it. */
+/**
+ * What an exercise looks like, what it works and how to do it, plus the coach's own video, which
+ * replaces the library demo for their clients. Only the coach's own exercises can be edited.
+ */
 @Composable
-private fun ExerciseDetailDialog(exercise: Exercise, onDismiss: () -> Unit) {
+private fun ExerciseDetailDialog(
+    exercise: Exercise,
+    videoBusy: Boolean,
+    onDismiss: () -> Unit,
+    onEdit: () -> Unit,
+    onUploadVideo: (ByteArray, String) -> Unit,
+    onLinkVideo: (String) -> Unit,
+    onRemoveVideo: () -> Unit,
+) {
+    val scope = rememberCoroutineScope()
+    val picker = rememberFilePickerLauncher(type = FileKitType.Video) { file ->
+        if (file != null) scope.launch { onUploadVideo(file.readBytes(), file.extension.ifBlank { "mp4" }) }
+    }
+    var linking by remember { mutableStateOf(false) }
+    var link by remember { mutableStateOf("") }
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text(exercise.name) },
         text = {
             Column(
-                Modifier.verticalScroll(rememberScrollState()),
+                Modifier.verticalScroll(rememberScrollState()).clearFocusOnTap(),
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
-                ExerciseAnimation(exercise)
+                ExerciseDemo(exercise)
+                Text("Your video", style = MaterialTheme.typography.titleSmall)
+                Text(
+                    if (exercise.customVideo != null) {
+                        "Your clients see this video instead of the library demo."
+                    } else {
+                        "Upload or link your own demo. Your clients see it instead of the library animation."
+                    },
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                if (linking) {
+                    AppTextField(
+                        link,
+                        { link = it },
+                        label = { Text("Video link (YouTube, Vimeo, .mp4)") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        TintedButton(
+                            "Save link",
+                            onClick = { onLinkVideo(link); linking = false; link = "" },
+                            enabled = link.trim().startsWith("http") && !videoBusy,
+                            size = ButtonSize.Sm,
+                        )
+                        GhostButton("Cancel", onClick = { linking = false }, size = ButtonSize.Sm)
+                    }
+                } else {
+                    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        TintedButton(
+                            if (exercise.customVideo?.storagePath != null) "Replace video" else "Upload video",
+                            onClick = { picker.launch() },
+                            loading = videoBusy,
+                            size = ButtonSize.Sm,
+                        )
+                        TintedButton("Add link", onClick = { linking = true }, enabled = !videoBusy, size = ButtonSize.Sm)
+                        // A link stored on the exercise row itself is edited in the exercise form.
+                        if (exercise.customVideos.isNotEmpty()) {
+                            DangerButton("Remove", onClick = onRemoveVideo, enabled = !videoBusy, size = ButtonSize.Sm)
+                        }
+                    }
+                }
                 val tags = exercise.attributes + listOfNotNull(exercise.bodyPart, exercise.target)
                 if (tags.isNotEmpty()) {
                     FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -445,8 +567,8 @@ private fun ExerciseDetailDialog(exercise: Exercise, onDismiss: () -> Unit) {
                 }
             }
         },
-        confirmButton = {},
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Close") } },
+        confirmButton = { if (!exercise.isGlobal) GhostButton("Edit", onEdit, size = ButtonSize.Sm) },
+        dismissButton = { GhostButton("Close", onDismiss, size = ButtonSize.Sm, dim = true) },
     )
 }
 
@@ -479,14 +601,14 @@ private fun EditDialog(
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) { content() }
         },
-        confirmButton = { TextButton(onClick = onSave, enabled = canSave && !saving) { Text(if (saving) "Saving…" else "Save") } },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
+        confirmButton = { GhostButton("Save", onSave, enabled = canSave, loading = saving, size = ButtonSize.Sm) },
+        dismissButton = { GhostButton("Cancel", onDismiss, size = ButtonSize.Sm, dim = true) },
     )
 }
 
 @Composable
 private fun TextInput(value: String, onValueChange: (String) -> Unit, label: String, singleLine: Boolean = true) {
-    OutlinedTextField(value, onValueChange, label = { Text(label) }, singleLine = singleLine, modifier = Modifier.fillMaxWidth())
+    AppTextField(value, onValueChange, label = { Text(label) }, singleLine = singleLine, modifier = Modifier.fillMaxWidth())
 }
 
 @Composable
@@ -496,7 +618,6 @@ private fun ExerciseDialog(initial: Exercise, saving: Boolean, onSave: (Exercise
         TextInput(e.name, { e = e.copy(name = it) }, "Name")
         TextInput(e.muscleGroup.orEmpty(), { e = e.copy(muscleGroup = it) }, "Muscle group")
         TextInput(e.equipment.orEmpty(), { e = e.copy(equipment = it) }, "Equipment")
-        TextInput(e.videoUrl.orEmpty(), { e = e.copy(videoUrl = it) }, "Video URL")
         TextInput(e.instructions.orEmpty(), { e = e.copy(instructions = it) }, "Instructions", singleLine = false)
     }
 }
@@ -522,8 +643,8 @@ private fun SupplementDialog(initial: Supplement, saving: Boolean, onSave: (Supp
     EditDialog(if (initial.id.isBlank()) "New supplement" else "Edit supplement", s.name.isNotBlank(), saving, { onSave(s) }, onDismiss) {
         TextInput(s.name, { s = s.copy(name = it) }, "Name")
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            OutlinedTextField(s.defaultDosage.orEmpty(), { s = s.copy(defaultDosage = it) }, label = { Text("Default dosage") }, singleLine = true, modifier = Modifier.weight(1f))
-            OutlinedTextField(s.unit.orEmpty(), { s = s.copy(unit = it) }, label = { Text("Unit") }, singleLine = true, modifier = Modifier.weight(1f))
+            AppTextField(s.defaultDosage.orEmpty(), { s = s.copy(defaultDosage = it) }, label = { Text("Default dosage") }, singleLine = true, modifier = Modifier.weight(1f))
+            AppTextField(s.unit.orEmpty(), { s = s.copy(unit = it) }, label = { Text("Unit") }, singleLine = true, modifier = Modifier.weight(1f))
         }
         TextInput(s.notes.orEmpty(), { s = s.copy(notes = it) }, "Notes", singleLine = false)
     }

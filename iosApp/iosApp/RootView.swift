@@ -19,6 +19,8 @@ struct RootView: View {
                 CoachShell(session: session).id(snapshot.profileId)
             } else if snapshot.kind == .client {
                 ClientShell(session: session, firstName: snapshot.firstName, displayName: snapshot.displayName, email: snapshot.email).id(snapshot.profileId)
+            } else if snapshot.kind == .intake {
+                ComposeFullScreen { IosScreensKt.intakeScreen() }.id(snapshot.profileId)
             } else if snapshot.kind == .joincoach {
                 ComposeFullScreen { IosScreensKt.joinCoachScreen() }
             } else if snapshot.kind == .signedout {

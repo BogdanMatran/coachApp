@@ -13,9 +13,11 @@ import ch.coachapp.data.repository.SupabaseCoachRepository
 import ch.coachapp.data.repository.SupabaseLibraryRepository
 import ch.coachapp.data.repository.SupabaseLogRepository
 import ch.coachapp.data.repository.SupabasePlanRepository
+import ch.coachapp.feature.account.AccountViewModel
 import ch.coachapp.feature.auth.AuthViewModel
 import ch.coachapp.feature.client.clientFeatureModule
 import ch.coachapp.feature.coach.coachFeatureModule
+import ch.coachapp.feature.progress.progressModule
 import io.github.jan.supabase.SupabaseClient
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -36,6 +38,7 @@ val dataModule = module {
 
 val authModule = module {
     viewModelOf(::AuthViewModel)
+    viewModelOf(::AccountViewModel)
 }
 
-val appModules = listOf(dataModule, authModule, coachFeatureModule, clientFeatureModule)
+val appModules = listOf(dataModule, authModule, coachFeatureModule, clientFeatureModule, progressModule)

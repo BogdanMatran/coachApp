@@ -15,17 +15,14 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Card
 import androidx.compose.material3.ExtendedFloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -44,6 +41,11 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
+import ch.coachapp.core.ui.ButtonSize
+import ch.coachapp.core.ui.GhostButton
+import ch.coachapp.core.ui.AppCard
+import ch.coachapp.core.ui.AppTextField
+import ch.coachapp.core.ui.LocalAppColors
 import ch.coachapp.core.Dates
 import ch.coachapp.core.ui.BackTopBar
 import ch.coachapp.core.ui.Centered
@@ -196,7 +198,7 @@ fun InvitesScreen(
 @Composable
 private fun InviteCard(invite: Invite, onCopy: () -> Unit, onDelete: () -> Unit) {
     val status = invite.status()
-    Card(Modifier.fillMaxWidth()) {
+    AppCard(Modifier.fillMaxWidth()) {
         Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 Text(invite.code, style = MaterialTheme.typography.headlineSmall, fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold)
@@ -207,7 +209,7 @@ private fun InviteCard(invite: Invite, onCopy: () -> Unit, onDelete: () -> Unit)
                         InviteStatus.Expired -> "Expired ${Dates.formatTimestamp(invite.expiresAt)}"
                     },
                     style = MaterialTheme.typography.bodySmall,
-                    color = if (status == InviteStatus.Active) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                    color = if (status == InviteStatus.Active) LocalAppColors.current.accText else MaterialTheme.colorScheme.onSurfaceVariant,
                 )
                 invite.email?.let { Text("For $it", style = MaterialTheme.typography.bodySmall) }
             }
@@ -228,7 +230,7 @@ private fun CreateInviteDialog(onCreate: (String?) -> Unit, onDismiss: () -> Uni
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text("A code valid for 14 days. The email is only a note for you.")
-                OutlinedTextField(
+                AppTextField(
                     value = email,
                     onValueChange = { email = it },
                     label = { Text("Client email (optional)") },
@@ -238,7 +240,7 @@ private fun CreateInviteDialog(onCreate: (String?) -> Unit, onDismiss: () -> Uni
                 )
             }
         },
-        confirmButton = { TextButton(onClick = { onCreate(email.ifBlank { null }) }) { Text("Create") } },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
+        confirmButton = { GhostButton("Create", { onCreate(email.ifBlank { null }) }, size = ButtonSize.Sm) },
+        dismissButton = { GhostButton("Cancel", onDismiss, size = ButtonSize.Sm, dim = true) },
     )
 }

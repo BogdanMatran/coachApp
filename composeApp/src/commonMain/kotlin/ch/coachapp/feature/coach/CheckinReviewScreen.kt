@@ -9,7 +9,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -20,6 +19,8 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
+import ch.coachapp.core.ui.AppTextField
+import ch.coachapp.core.ui.LocalAppColors
 import ch.coachapp.core.Dates
 import ch.coachapp.core.ui.BackTopBar
 import ch.coachapp.core.ui.Centered
@@ -181,14 +182,14 @@ fun CheckinReviewScreen(
                     )
 
                     SectionHeader("Your feedback")
-                    OutlinedTextField(
+                    AppTextField(
                         value = state.feedback,
                         onValueChange = onFeedbackChange,
                         placeholder = { Text("What went well, what to adjust next week…") },
                         minLines = 4,
                         modifier = Modifier.fillMaxWidth(),
                     )
-                    state.message?.let { Text(it, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Medium) }
+                    state.message?.let { Text(it, color = LocalAppColors.current.accText, fontWeight = FontWeight.Medium) }
                     PrimaryButton(
                         text = if (checkin.isReviewed) "Update feedback" else "Mark reviewed",
                         onClick = onSubmit,

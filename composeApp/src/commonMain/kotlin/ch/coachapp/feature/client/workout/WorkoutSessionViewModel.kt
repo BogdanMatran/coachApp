@@ -48,6 +48,14 @@ data class WorkoutSessionUiState(
     val hasEnteredData: Boolean get() = notes.isNotBlank() || exercises.any { ex -> ex.sets.any { it.done || it.touched } }
     val doneCount: Int get() = exercises.sumOf { ex -> ex.sets.count { it.done } }
     val totalCount: Int get() = exercises.sumOf { it.sets.size }
+
+    /** Weight × reps over the completed sets, for the finish summary. */
+    val volumeKg: Double
+        get() = exercises.sumOf { ex ->
+            ex.sets.filter { it.done }.sumOf { set ->
+                (set.weight.toDoubleOrNullLenient() ?: 0.0) * (set.reps.toIntOrNull() ?: 0)
+            }
+        }
 }
 
 class WorkoutSessionViewModel(
@@ -105,6 +113,12 @@ class WorkoutSessionViewModel(
 
     fun removeSet(exerciseIndex: Int, setIndex: Int) = updateExercise(exerciseIndex) { ex ->
         ex.copy(sets = ex.sets.filterIndexed { i, _ -> i != setIndex })
+    }
+
+    /** Puts a set removed by [removeSet] back where it was, for the snackbar's Undo. */
+    fun restoreSet(exerciseIndex: Int, setIndex: Int, set: SetInput) = updateExercise(exerciseIndex) { ex ->
+        val at = setIndex.coerceIn(0, ex.sets.size)
+        ex.copy(sets = ex.sets.take(at) + set + ex.sets.drop(at))
     }
 
     fun setNotes(notes: String) = _state.update { it.copy(notes = notes) }

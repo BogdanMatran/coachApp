@@ -7,6 +7,7 @@ enum CoachRoute: Hashable {
     /// kind is "workout", "meal" or "supplement"; no clientId means a template.
     case builder(kind: String, planId: String?, clientId: String?)
     case checkinTemplate
+    case intakeTemplate
     case checkinReview(id: String)
 }
 
@@ -50,6 +51,7 @@ struct CoachShell: View {
                     IosScreensKt.coachSettingsScreen(
                         host: host,
                         onOpenCheckinTemplate: { nav.push(.checkinTemplate) },
+                        onOpenIntakeTemplate: { nav.push(.intakeTemplate) },
                         onOpenInvites: { nav.push(.invites) },
                         onSignOut: { session.signOut() }
                     )
@@ -104,6 +106,10 @@ private struct CoachStack<Root: View>: View {
         case .checkinTemplate:
             ComposeScreen(title: "Check-in questions") { host in
                 IosScreensKt.coachCheckinTemplateScreen(host: host, onBack: { nav.pop() })
+            }
+        case .intakeTemplate:
+            ComposeScreen(title: "Onboarding form") { host in
+                IosScreensKt.coachIntakeTemplateScreen(host: host, onBack: { nav.pop() })
             }
         case .checkinReview(let id):
             ComposeScreen(title: "Check-in") { host in

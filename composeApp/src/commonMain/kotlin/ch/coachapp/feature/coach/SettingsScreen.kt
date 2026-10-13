@@ -11,9 +11,9 @@ import androidx.compose.material.icons.automirrored.filled.ExitToApp
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material.icons.filled.Email
+import androidx.compose.material.icons.filled.Person
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -23,6 +23,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
+import ch.coachapp.core.ui.AppTextField
 import ch.coachapp.core.ui.AppearanceCard
 import ch.coachapp.core.ui.Centered
 import ch.coachapp.core.ui.DangerButton
@@ -35,6 +36,7 @@ import ch.coachapp.core.ui.PrimaryButton
 import ch.coachapp.core.ui.SectionHeader
 import ch.coachapp.core.ui.bottomBarInset
 import ch.coachapp.data.repository.AuthRepository
+import ch.coachapp.feature.account.AccountSection
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -75,12 +77,13 @@ class SettingsViewModel(private val auth: AuthRepository) : ViewModel() {
 @Composable
 fun SettingsDestination(
     onOpenCheckinTemplate: () -> Unit,
+    onOpenIntakeTemplate: () -> Unit,
     onOpenInvites: () -> Unit,
     onSignOut: () -> Unit,
     viewModel: SettingsViewModel = koinViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
-    SettingsScreen(state, viewModel::setName, viewModel::saveName, onOpenCheckinTemplate, onOpenInvites, onSignOut)
+    SettingsScreen(state, viewModel::setName, viewModel::saveName, onOpenCheckinTemplate, onOpenIntakeTemplate, onOpenInvites, onSignOut)
 }
 
 @Composable
@@ -89,6 +92,7 @@ fun SettingsScreen(
     onNameChange: (String) -> Unit,
     onSaveName: () -> Unit,
     onOpenCheckinTemplate: () -> Unit,
+    onOpenIntakeTemplate: () -> Unit,
     onOpenInvites: () -> Unit,
     onSignOut: () -> Unit,
 ) {
@@ -101,7 +105,7 @@ fun SettingsScreen(
             ) {
                 SectionHeader("Profile")
                 InfoCard {
-                    OutlinedTextField(
+                    AppTextField(
                         value = state.fullName,
                         onValueChange = onNameChange,
                         label = { Text("Display name") },
@@ -110,7 +114,7 @@ fun SettingsScreen(
                         modifier = Modifier.fillMaxWidth(),
                     )
                     Text(state.email, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    state.message?.let { Text(it, color = MaterialTheme.colorScheme.primary) }
+                    state.message?.let { Text(it, color = LocalAppColors.current.accText) }
                     PrimaryButton("Save", onClick = onSaveName, enabled = state.nameChanged, loading = state.saving)
                 }
 
@@ -126,6 +130,13 @@ fun SettingsScreen(
                         onOpenCheckinTemplate,
                     )
                     SettingsRow(
+                        "Onboarding form",
+                        "Questions new clients answer once after joining",
+                        Icons.Default.Person,
+                        onOpenIntakeTemplate,
+                        showDivider = true,
+                    )
+                    SettingsRow(
                         "Invites",
                         "Codes for new clients to join you",
                         Icons.Default.Email,
@@ -133,6 +144,8 @@ fun SettingsScreen(
                         showDivider = true,
                     )
                 }
+
+                AccountSection()
 
                 DangerButton(
                     "Sign out",

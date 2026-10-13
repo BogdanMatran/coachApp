@@ -78,7 +78,8 @@ import kotlin.math.roundToInt
  * The thumb carries the app's only shadow: on iOS it is what tells the thumb apart from the track
  * in light mode. In dark mode the lighter fill does that job and the shadow is dropped.
  *
- * Pass [icon] to put a glyph before each label; it takes the label's colour and weight.
+ * Pass [icon] to put a glyph before each label; it takes the label's colour and weight, unless
+ * [selectedIconColor] gives the selected one a colour of its own.
  *
  * Pass [thumbColor] to fill the thumb with a per-option colour instead (see
  * [YesNoSegmentedControl]); [selectedLabelColor] then sets the label on top of it (unspecified keeps the theme label). A coloured thumb
@@ -96,6 +97,7 @@ fun <T> SegmentedControl(
     icon: ((T) -> ImageVector)? = null,
     thumbColor: ((T) -> Color)? = null,
     selectedLabelColor: (T) -> Color = { Color.Unspecified },
+    selectedIconColor: (T) -> Color = { Color.Unspecified },
 ) {
     require(options.isNotEmpty()) { "SegmentedControl needs at least one option" }
     val colors = LocalAppColors.current
@@ -282,6 +284,11 @@ fun <T> SegmentedControl(
                         animationSpec = tween(PressDuration),
                         label = "label$index",
                     )
+                    val iconColor by animateColorAsState(
+                        targetValue = if (isSelected) selectedIconColor(option).takeOrElse { labelColor } else labelColor,
+                        animationSpec = tween(PressDuration),
+                        label = "icon$index",
+                    )
                     Row(
                         horizontalArrangement = Arrangement.spacedBy(5.dp),
                         verticalAlignment = Alignment.CenterVertically,
@@ -291,7 +298,7 @@ fun <T> SegmentedControl(
                             Icon(
                                 imageVector = it(option),
                                 contentDescription = null,
-                                tint = labelColor,
+                                tint = iconColor,
                                 modifier = Modifier.size(SegmentIconSize),
                             )
                         }
@@ -349,7 +356,8 @@ fun YesNoSegmentedControl(
         enabled = enabled,
         label = { if (it) yesLabel else noLabel },
         thumbColor = { if (it) colors.green else colors.red },
-        selectedLabelColor = { if (it) colors.onAcc else Color.White },
+        // The status hues, not the accent: pick the label by the fill's own luminance.
+        selectedLabelColor = { glyphColorOn(if (it) colors.green else colors.red) },
     )
 }
 

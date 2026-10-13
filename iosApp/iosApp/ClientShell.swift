@@ -4,6 +4,8 @@ import ComposeApp
 enum ClientRoute: Hashable {
     case workout(dayId: String)
     case checkin(id: String)
+    case checkinForm
+    case exercise(workoutExerciseId: String)
     case settings
 }
 
@@ -17,31 +19,39 @@ struct ClientShell: View {
         TabView {
             ClientStack(session: session, displayName: displayName, email: email) { nav in
                 ComposeScreen(title: firstName.isEmpty ? "Today" : "Hi, \(firstName)", displayMode: .large) { host in
-                    IosScreensKt.clientTodayScreen(host: host) { nav.push(.workout(dayId: $0)) }
+                    IosScreensKt.clientTodayScreen(
+                        host: host,
+                        onStartWorkout: { nav.push(.workout(dayId: $0)) },
+                        onOpenCheckin: { nav.push(.checkinForm) }
+                    )
                 }
                 .contentUnderTabBar()
             }
             .tabItem { Label("Today", systemImage: "house") }
 
-            ClientStack(session: session, displayName: displayName, email: email) { _ in
+            ClientStack(session: session, displayName: displayName, email: email) { nav in
                 ComposeScreen(title: "Plan", displayMode: .large) { host in
-                    IosScreensKt.clientPlanScreen(host: host)
+                    IosScreensKt.clientPlanScreen(host: host) { nav.push(.exercise(workoutExerciseId: $0)) }
                 }
                 .contentUnderTabBar()
             }
             .tabItem { Label("Plan", systemImage: "list.bullet.clipboard") }
 
-            ClientStack(session: session, displayName: displayName, email: email) { _ in
+            ClientStack(session: session, displayName: displayName, email: email) { nav in
                 ComposeScreen(title: "Check-in", displayMode: .large) { host in
-                    IosScreensKt.clientCheckinScreen(host: host)
+                    IosScreensKt.clientCheckinScreen(
+                        host: host,
+                        onOpenForm: { nav.push(.checkinForm) },
+                        onOpenCheckin: { nav.push(.checkin(id: $0)) }
+                    )
                 }
                 .contentUnderTabBar()
             }
             .tabItem { Label("Check-in", systemImage: "checkmark.circle") }
 
-            ClientStack(session: session, displayName: displayName, email: email) { nav in
+            ClientStack(session: session, displayName: displayName, email: email) { _ in
                 ComposeScreen(title: "History", displayMode: .large) { host in
-                    IosScreensKt.clientHistoryScreen(host: host) { nav.push(.checkin(id: $0)) }
+                    IosScreensKt.clientHistoryScreen(host: host)
                 }
                 .contentUnderTabBar()
             }
@@ -75,17 +85,9 @@ private struct ClientStack<Root: View>: View {
             root(nav)
                 .toolbar {
                     ToolbarItem(placement: .topBarTrailing) {
-                        Menu {
-                            Button("Settings", systemImage: "gearshape") {
-                                nav.push(.settings)
-                            }
-                            Button("Sign out", systemImage: "rectangle.portrait.and.arrow.right", role: .destructive) {
-                                session.signOut()
-                            }
-                        } label: {
-                            Image(systemName: "person.crop.circle")
+                        Button("Settings", systemImage: "gearshape") {
+                            nav.push(.settings)
                         }
-                        .accessibilityLabel("Account")
                     }
                 }
                 .navigationDestination(for: ClientRoute.self) { route in
@@ -99,11 +101,26 @@ private struct ClientStack<Root: View>: View {
         switch route {
         case .workout(let dayId):
             ComposeScreen(title: "Workout") { host in
-                IosScreensKt.clientWorkoutSessionScreen(host: host, dayId: dayId, onDone: { nav.pop() })
+                IosScreensKt.clientWorkoutSessionScreen(
+                    host: host,
+                    dayId: dayId,
+                    onDone: { nav.pop() },
+                    onOpenExercise: { nav.push(.exercise(workoutExerciseId: $0)) }
+                )
             }
         case .checkin(let id):
             ComposeScreen(title: "Check-in") { host in
                 IosScreensKt.clientCheckinDetailScreen(host: host, checkinId: id, onBack: { nav.pop() })
+            }
+            .contentUnderTabBar()
+        case .exercise(let id):
+            ComposeScreen(title: "Exercise") { host in
+                IosScreensKt.clientExerciseDetailScreen(host: host, workoutExerciseId: id, onBack: { nav.pop() })
+            }
+            .contentUnderTabBar()
+        case .checkinForm:
+            ComposeScreen(title: "Check-in") { host in
+                IosScreensKt.clientCheckinFormScreen(host: host, onBack: { nav.pop() }, onDone: { nav.pop() })
             }
         case .settings:
             ComposeScreen(title: "Settings") { host in

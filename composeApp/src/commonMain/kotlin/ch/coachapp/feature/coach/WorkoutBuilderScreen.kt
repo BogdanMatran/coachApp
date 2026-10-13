@@ -15,16 +15,12 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
-import androidx.compose.material3.Card
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -38,11 +34,15 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
+import ch.coachapp.core.ui.ButtonSize
+import ch.coachapp.core.ui.NeutralButton
+import ch.coachapp.core.ui.GhostButton
+import ch.coachapp.core.ui.AppCard
+import ch.coachapp.core.ui.AppTextField
 import ch.coachapp.core.ui.BackTopBar
 import ch.coachapp.core.ui.BarAction
 import ch.coachapp.core.ui.Centered
 import ch.coachapp.core.ui.ErrorBox
-import ch.coachapp.core.ui.ExerciseThumb
 import ch.coachapp.core.ui.LoadingBox
 import ch.coachapp.data.model.Exercise
 import ch.coachapp.data.repository.LibraryRepository
@@ -52,6 +52,7 @@ import ch.coachapp.domain.WorkoutDraft
 import ch.coachapp.domain.WorkoutExerciseDraft
 import ch.coachapp.domain.moveDown
 import ch.coachapp.domain.moveUp
+import ch.coachapp.feature.exercise.ExerciseThumbnail
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -188,8 +189,8 @@ fun WorkoutBuilderScreen(state: WorkoutBuilderUiState, actions: WorkoutBuilderVi
                     item {
                         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                             state.saveError?.let { Text(it, color = MaterialTheme.colorScheme.error) }
-                            OutlinedTextField(state.draft.name, actions::setName, label = { Text("Plan name") }, singleLine = true, modifier = Modifier.fillMaxWidth())
-                            OutlinedTextField(state.draft.notes, actions::setNotes, label = { Text("Notes for the client") }, modifier = Modifier.fillMaxWidth())
+                            AppTextField(state.draft.name, actions::setName, label = { Text("Plan name") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                            AppTextField(state.draft.notes, actions::setNotes, label = { Text("Notes for the client") }, modifier = Modifier.fillMaxWidth())
                         }
                     }
                     itemsIndexed(state.draft.days, key = { _, day -> day.key }) { index, day ->
@@ -202,10 +203,7 @@ fun WorkoutBuilderScreen(state: WorkoutBuilderUiState, actions: WorkoutBuilderVi
                         )
                     }
                     item {
-                        OutlinedButton(onClick = actions::addDay, modifier = Modifier.fillMaxWidth()) {
-                            Icon(Icons.Default.Add, contentDescription = null)
-                            Text("Add day")
-                        }
+                        NeutralButton("Add day", { actions.addDay() }, icon = Icons.Default.Add)
                     }
                 }
             }
@@ -218,7 +216,7 @@ fun WorkoutBuilderScreen(state: WorkoutBuilderUiState, actions: WorkoutBuilderVi
             items = state.library,
             itemLabel = { it.name },
             itemSubtitle = { it.attributes.joinToString(" · ").ifEmpty { null } },
-            itemLeading = { ExerciseThumb(it, size = 44.dp) },
+            itemLeading = { ExerciseThumbnail(it, size = 44.dp) },
             onPick = { actions.addExercise(dayKey, it); pickingFor = null },
             onDismiss = { pickingFor = null },
         )
@@ -233,10 +231,10 @@ private fun DayCard(
     actions: WorkoutBuilderViewModel,
     onAddExercise: () -> Unit,
 ) {
-    Card(Modifier.fillMaxWidth()) {
+    AppCard(Modifier.fillMaxWidth()) {
         Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                OutlinedTextField(
+                AppTextField(
                     value = day.title,
                     onValueChange = { actions.setDayTitle(day.key, it) },
                     label = { Text("Day ${index + 1}") },
@@ -247,7 +245,7 @@ private fun DayCard(
                 IconButton(onClick = { actions.moveDayDown(index) }, enabled = !isLast) { Icon(Icons.Default.KeyboardArrowDown, "Move day down") }
                 IconButton(onClick = { actions.removeDay(day.key) }) { Icon(Icons.Default.Delete, "Remove day") }
             }
-            OutlinedTextField(
+            AppTextField(
                 value = day.notes,
                 onValueChange = { actions.setDayNotes(day.key, it) },
                 label = { Text("Day notes") },
@@ -265,10 +263,7 @@ private fun DayCard(
                     onRemove = { actions.removeExercise(day.key, exercise.key) },
                 )
             }
-            TextButton(onClick = onAddExercise) {
-                Icon(Icons.Default.Add, contentDescription = null)
-                Text("Add exercise")
-            }
+            GhostButton("Add exercise", onAddExercise, size = ButtonSize.Sm, icon = Icons.Default.Add)
         }
     }
 }
@@ -285,7 +280,7 @@ private fun ExerciseEditor(
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            ExerciseThumb(exercise.exercise, size = 40.dp)
+            ExerciseThumbnail(exercise.exercise, size = 40.dp)
             Column(Modifier.weight(1f)) {
                 Text(exercise.exercise.name, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
                 exercise.exercise.muscleGroup?.let { Text(it, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
@@ -296,7 +291,7 @@ private fun ExerciseEditor(
         }
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             IntField(exercise.sets, { v -> v?.let { onChange { e -> e.copy(sets = it.coerceIn(1, 20)) } } }, "Sets", Modifier.weight(1f))
-            OutlinedTextField(
+            AppTextField(
                 value = exercise.reps,
                 onValueChange = { v -> onChange { it.copy(reps = v.take(12)) } },
                 label = { Text("Reps") },
@@ -307,14 +302,14 @@ private fun ExerciseEditor(
             DecimalField(exercise.targetRpe, { v -> onChange { it.copy(targetRpe = v) } }, "RPE", Modifier.weight(1f))
         }
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            OutlinedTextField(
+            AppTextField(
                 value = exercise.tempo,
                 onValueChange = { v -> onChange { it.copy(tempo = v.take(12)) } },
                 label = { Text("Tempo") },
                 singleLine = true,
                 modifier = Modifier.weight(1f),
             )
-            OutlinedTextField(
+            AppTextField(
                 value = exercise.notes,
                 onValueChange = { v -> onChange { it.copy(notes = v) } },
                 label = { Text("Notes") },

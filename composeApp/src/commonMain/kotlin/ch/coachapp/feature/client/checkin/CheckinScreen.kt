@@ -1,6 +1,6 @@
 package ch.coachapp.feature.client.checkin
 
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -11,7 +11,6 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.background
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -22,7 +21,7 @@ import androidx.compose.material3.FilledIconButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -38,16 +37,21 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import ch.coachapp.core.Dates
+import ch.coachapp.core.ui.AppTextField
+import ch.coachapp.core.ui.BackTopBar
+import ch.coachapp.core.ui.Celebration
 import ch.coachapp.core.ui.Centered
 import ch.coachapp.core.ui.ErrorBox
 import ch.coachapp.core.ui.InfoCard
 import ch.coachapp.core.ui.LoadingBox
+import ch.coachapp.core.ui.LocalAppColors
 import ch.coachapp.core.ui.NumberField
 import ch.coachapp.core.ui.NumberSegmentedControl
 import ch.coachapp.core.ui.PrimaryButton
 import ch.coachapp.core.ui.SectionHeader
 import ch.coachapp.core.ui.YesNoSegmentedControl
 import ch.coachapp.core.ui.bottomBarInset
+import ch.coachapp.core.ui.highlightClickable
 import ch.coachapp.data.model.CheckinQuestion
 import ch.coachapp.data.model.MeasurementKeys
 import ch.coachapp.data.model.Pose
@@ -59,8 +63,9 @@ import io.github.vinceglb.filekit.readBytes
 import kotlinx.coroutines.launch
 import org.koin.compose.viewmodel.koinViewModel
 
+/** This week's check-in form, opened from the Check-in list; [onDone] runs once it's sent. */
 @Composable
-fun CheckinRoute(viewModel: CheckinViewModel = koinViewModel()) {
+fun CheckinFormRoute(onBack: () -> Unit, onDone: () -> Unit, viewModel: CheckinViewModel = koinViewModel()) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val scope = rememberCoroutineScope()
     var pendingPose by remember { mutableStateOf<Pose?>(null) }
@@ -71,17 +76,24 @@ fun CheckinRoute(viewModel: CheckinViewModel = koinViewModel()) {
             scope.launch { viewModel.setPhoto(pose, file.readBytes()) }
         }
     }
-    CheckinScreen(
-        state = state,
-        onRetry = viewModel::load,
-        onWeightChange = viewModel::setWeight,
-        onBodyFatChange = viewModel::setBodyFat,
-        onMeasurementChange = viewModel::setMeasurement,
-        onAnswerChange = viewModel::setAnswer,
-        onPickPhoto = { pose -> pendingPose = pose; picker.launch() },
-        onRemovePhoto = viewModel::removeNewPhoto,
-        onSubmit = viewModel::submit,
-    )
+    Scaffold(topBar = { BackTopBar("Check-in", onBack) }) { padding ->
+        Box(Modifier.fillMaxSize().padding(padding)) {
+            CheckinScreen(
+                state = state,
+                onRetry = viewModel::load,
+                onWeightChange = viewModel::setWeight,
+                onBodyFatChange = viewModel::setBodyFat,
+                onMeasurementChange = viewModel::setMeasurement,
+                onAnswerChange = viewModel::setAnswer,
+                onPickPhoto = { pose -> pendingPose = pose; picker.launch() },
+                onRemovePhoto = viewModel::removeNewPhoto,
+                onSubmit = viewModel::submit,
+            )
+        }
+    }
+    if (state.justSubmitted) {
+        Celebration("Check-in sent", "Your coach will review it and reply here.", onFinished = onDone)
+    }
 }
 
 @Composable
@@ -144,7 +156,7 @@ private fun CheckinFormContent(
     if (state.justSubmitted) {
         InfoCard {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(Icons.Default.CheckCircle, contentDescription = null, tint = MaterialTheme.colorScheme.secondary)
+                Icon(Icons.Default.CheckCircle, contentDescription = null, tint = LocalAppColors.current.accText)
                 Text("Check-in sent to your coach.", modifier = Modifier.padding(start = 8.dp))
             }
         }
@@ -204,8 +216,9 @@ private fun CheckinFormContent(
     }
 }
 
+/** One answer field, shaped by the question type. Shared with the onboarding form. */
 @Composable
-private fun QuestionInput(question: CheckinQuestion, value: String, onChange: (String) -> Unit) {
+fun QuestionInput(question: CheckinQuestion, value: String, onChange: (String) -> Unit) {
     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
         if (question.type != QuestionType.Text && question.type != QuestionType.Number) {
             Text(question.label, style = MaterialTheme.typography.bodyLarge)
@@ -224,7 +237,7 @@ private fun QuestionInput(question: CheckinQuestion, value: String, onChange: (S
                 onValueChange = { onChange(if (it) "yes" else "no") },
             )
             QuestionType.Number -> NumberField(value, onChange, question.label, Modifier.fillMaxWidth())
-            QuestionType.Text -> OutlinedTextField(
+            QuestionType.Text -> AppTextField(
                 value = value,
                 onValueChange = onChange,
                 label = { Text(question.label) },
@@ -247,7 +260,7 @@ private fun PhotoSlot(
     Column(modifier, horizontalAlignment = Alignment.CenterHorizontally) {
         Box(
             Modifier.fillMaxWidth().aspectRatio(3f / 4f).clip(MaterialTheme.shapes.medium)
-                .background(MaterialTheme.colorScheme.surfaceVariant).clickable(onClick = onPick),
+                .background(MaterialTheme.colorScheme.surfaceVariant).highlightClickable(onClick = onPick),
             contentAlignment = Alignment.Center,
         ) {
             val model: Any? = newPhoto ?: existingUrl

@@ -1,6 +1,5 @@
 package ch.coachapp.feature.coach
 
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.FlowRow
@@ -13,24 +12,19 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.AssistChip
-import androidx.compose.material3.Card
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
-import androidx.compose.material3.ListItem
-import androidx.compose.material3.ListItemDefaults
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.PrimaryScrollableTabRow
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Tab
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -45,24 +39,39 @@ import androidx.lifecycle.viewModelScope
 import ch.coachapp.core.Dates
 import ch.coachapp.core.fmt
 import ch.coachapp.core.ui.ActivityCard
+import ch.coachapp.core.ui.AnswerList
+import ch.coachapp.core.ui.AppCard
 import ch.coachapp.core.ui.BackTopBar
 import ch.coachapp.core.ui.BarAction
+import ch.coachapp.core.ui.ButtonSize
 import ch.coachapp.core.ui.Centered
 import ch.coachapp.core.ui.ChartCard
+import ch.coachapp.core.ui.DropdownField
 import ch.coachapp.core.ui.EmptyState
 import ch.coachapp.core.ui.ErrorBox
+import ch.coachapp.core.ui.GhostButton
+import ch.coachapp.core.ui.GroupedList
 import ch.coachapp.core.ui.InfoCard
+import ch.coachapp.core.ui.ListRow
 import ch.coachapp.core.ui.LoadingBox
+import ch.coachapp.core.ui.LocalAppColors
 import ch.coachapp.core.ui.LocalChartColors
+import ch.coachapp.core.ui.NeutralButton
 import ch.coachapp.core.ui.RingRow
 import ch.coachapp.core.ui.SectionHeader
 import ch.coachapp.core.ui.StatChip
 import ch.coachapp.core.ui.StatRing
+import ch.coachapp.core.ui.Tag
 import ch.coachapp.core.ui.TargetBar
+import ch.coachapp.core.ui.TintedButton
+import ch.coachapp.core.ui.highlightClickable
 import ch.coachapp.core.ui.weekLabel
 import ch.coachapp.data.model.Checkin
+import ch.coachapp.data.model.CheckinQuestion
 import ch.coachapp.data.model.CheckinStatus
 import ch.coachapp.data.model.DayActivity
+import ch.coachapp.data.model.FormKind
+import ch.coachapp.data.model.IntakeResponse
 import ch.coachapp.data.model.MealLog
 import ch.coachapp.data.model.MealPlan
 import ch.coachapp.data.model.PlanKind
@@ -76,8 +85,10 @@ import ch.coachapp.data.repository.CheckinRepository
 import ch.coachapp.data.repository.CoachRepository
 import ch.coachapp.data.repository.LogRepository
 import ch.coachapp.data.repository.PlanRepository
+import ch.coachapp.domain.CheckinSchedule
 import ch.coachapp.domain.macros
 import ch.coachapp.domain.macrosFor
+import ch.coachapp.feature.progress.ProgressPane
 import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -91,7 +102,7 @@ import org.koin.compose.viewmodel.koinViewModel
 import org.koin.core.parameter.parametersOf
 
 enum class ClientTab(val label: String) {
-    Overview("Overview"), Workout("Workout"), Meals("Meals"), Supplements("Supplements"), Checkins("Check-ins"), Logs("Logs"),
+    Overview("Overview"), Progress("Progress"), Workout("Workout"), Meals("Meals"), Supplements("Supplements"), Checkins("Check-ins"), Logs("Logs"),
 }
 
 /** Meals and supplements completed on one day, for the adherence table. */
@@ -110,6 +121,8 @@ data class ClientDetailUiState(
     val mealLogs: List<MealLog> = emptyList(),
     val supplementLogs: List<SupplementLog> = emptyList(),
     val activity: List<DayActivity> = emptyList(),
+    val intake: IntakeResponse? = null,
+    val intakeQuestions: List<CheckinQuestion> = emptyList(),
     /** Open "assign template" dialog; templates are null while loading. */
     val assignKind: PlanKind? = null,
     val templates: List<PlanSummary>? = null,
@@ -169,6 +182,7 @@ class ClientDetailViewModel(
             val mealLogs = async { logs.mealLogs(id, from, today) }
             val supplementLogs = async { logs.supplementLogs(id, from, today) }
             val activity = async { logs.dailyActivity(id, days = 371) }
+            val intake = async { checkins.intakeResponse(id) }
 
             val profileResult = profile.await()
             val results = listOf(workout, meal, supplement, checkinList, history, mealLogs, supplementLogs).map { it.await() }
@@ -187,12 +201,28 @@ class ClientDetailViewModel(
                     supplementLogs = supplementLogs.await().getOrDefault(it.supplementLogs),
                     // Optional: a failed heatmap load shouldn't flag the whole screen.
                     activity = activity.await().getOrDefault(it.activity),
+                    intake = intake.await().getOrDefault(it.intake),
                 )
+            }
+            // Labels for the onboarding answers come from the coach's current form.
+            val coachId = _state.value.profile?.coachId ?: return@launch
+            checkins.template(coachId, FormKind.Intake).onSuccess { template ->
+                _state.update { it.copy(intakeQuestions = template?.questions.orEmpty()) }
             }
         }
     }
 
     fun selectTab(tab: ClientTab) = _state.update { it.copy(tab = tab) }
+
+    fun setCheckinDay(day: Int) {
+        val previous = _state.value.profile ?: return
+        _state.update { it.copy(profile = previous.copy(checkinDay = day)) }
+        viewModelScope.launch {
+            coach.setCheckinDay(route.clientId, day).onFailure { e ->
+                _state.update { it.copy(profile = previous, message = e.message) }
+            }
+        }
+    }
 
     fun openAssign(kind: PlanKind) {
         _state.update { it.copy(assignKind = kind, templates = null) }
@@ -234,6 +264,7 @@ fun ClientDetailDestination(
         onBack = onBack,
         onRefresh = viewModel::load,
         onTabChange = viewModel::selectTab,
+        onCheckinDayChange = viewModel::setCheckinDay,
         onEditPlan = { kind, planId -> onOpenBuilder(kind, planId, route.clientId) },
         onNewPlan = { kind -> onOpenBuilder(kind, null, route.clientId) },
         onOpenAssign = viewModel::openAssign,
@@ -249,6 +280,7 @@ fun ClientDetailScreen(
     onBack: () -> Unit,
     onRefresh: () -> Unit,
     onTabChange: (ClientTab) -> Unit,
+    onCheckinDayChange: (Int) -> Unit,
     onEditPlan: (PlanKind, String) -> Unit,
     onNewPlan: (PlanKind) -> Unit,
     onOpenAssign: (PlanKind) -> Unit,
@@ -280,19 +312,21 @@ fun ClientDetailScreen(
                 when {
                     state.loading -> LoadingBox()
                     state.profile == null -> ErrorBox(state.error ?: "Client not found", onRetry = onRefresh)
+                    state.tab == ClientTab.Progress -> ProgressPane(state.profile.id)
                     else -> LazyColumn(
                         Modifier.fillMaxSize(),
                         contentPadding = PaddingValues(16.dp),
                         verticalArrangement = Arrangement.spacedBy(12.dp),
                     ) {
-                        state.message?.let { msg -> item { Text(msg, color = MaterialTheme.colorScheme.primary) } }
+                        state.message?.let { msg -> item { Text(msg, color = LocalAppColors.current.accText) } }
                         state.error?.let { err -> item { Text(err, color = MaterialTheme.colorScheme.error) } }
                         when (state.tab) {
-                            ClientTab.Overview -> overviewTab(state, onTabChange)
+                            ClientTab.Overview -> overviewTab(state, onTabChange, onCheckinDayChange)
                             ClientTab.Workout -> workoutTab(state.workout, onEditPlan, onNewPlan, onOpenAssign)
                             ClientTab.Meals -> mealTab(state.meal, onEditPlan, onNewPlan, onOpenAssign)
                             ClientTab.Supplements -> supplementTab(state.supplement, onEditPlan, onNewPlan, onOpenAssign)
                             ClientTab.Checkins -> checkinsTab(state.checkins, onOpenCheckin)
+                            ClientTab.Progress -> Unit
                             ClientTab.Logs -> logsTab(state)
                         }
                     }
@@ -333,13 +367,25 @@ private fun ThisWeekRings(state: ClientDetailUiState) {
     }
 }
 
-private fun LazyListScope.overviewTab(state: ClientDetailUiState, onTabChange: (ClientTab) -> Unit) {
+private fun LazyListScope.overviewTab(
+    state: ClientDetailUiState,
+    onTabChange: (ClientTab) -> Unit,
+    onCheckinDayChange: (Int) -> Unit,
+) {
     val profile = state.profile ?: return
     val latest = state.checkins.firstOrNull()
     item {
         InfoCard {
             Text(profile.displayName, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold)
             profile.email?.let { Text(it, color = MaterialTheme.colorScheme.onSurfaceVariant) }
+            DropdownField(
+                label = "Weekly check-in day",
+                selected = profile.checkinDay,
+                options = CheckinSchedule.days,
+                optionLabel = CheckinSchedule::dayName,
+                onSelect = onCheckinDayChange,
+                modifier = Modifier.fillMaxWidth(),
+            )
         }
     }
     item { ThisWeekRings(state) }
@@ -353,10 +399,23 @@ private fun LazyListScope.overviewTab(state: ClientDetailUiState, onTabChange: (
     if (state.activity.isNotEmpty()) item { ActivityCard(state.activity) }
     item { SectionHeader("Active plans") }
     item {
-        Card {
+        GroupedList {
             PlanRow("Workout", state.workout?.name) { onTabChange(ClientTab.Workout) }
-            PlanRow("Meals", state.meal?.name) { onTabChange(ClientTab.Meals) }
-            PlanRow("Supplements", state.supplement?.name) { onTabChange(ClientTab.Supplements) }
+            PlanRow("Meals", state.meal?.name, showDivider = true) { onTabChange(ClientTab.Meals) }
+            PlanRow("Supplements", state.supplement?.name, showDivider = true) { onTabChange(ClientTab.Supplements) }
+        }
+    }
+    state.intake?.let { intake ->
+        item { SectionHeader("Onboarding answers") }
+        item {
+            InfoCard {
+                AnswerList(intake.answers, state.intakeQuestions)
+                Text(
+                    "Sent ${Dates.formatTimestamp(intake.submittedAt)}",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
         }
     }
     latest?.let { checkin ->
@@ -372,12 +431,13 @@ private fun LazyListScope.overviewTab(state: ClientDetailUiState, onTabChange: (
 }
 
 @Composable
-private fun PlanRow(label: String, name: String?, onClick: () -> Unit) {
-    ListItem(
-        overlineContent = { Text(label) },
-        headlineContent = { Text(name ?: "Not assigned", color = if (name == null) MaterialTheme.colorScheme.onSurfaceVariant else Color.Unspecified) },
-        colors = ListItemDefaults.colors(containerColor = Color.Transparent),
-        modifier = Modifier.clickable(onClick = onClick),
+private fun PlanRow(label: String, name: String?, showDivider: Boolean = false, onClick: () -> Unit) {
+    ListRow(
+        title = label,
+        value = name ?: "Not assigned",
+        showDivider = showDivider,
+        trailing = { Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = null, tint = LocalAppColors.current.label3) },
+        onClick = onClick,
     )
 }
 
@@ -398,8 +458,8 @@ private fun LazyListScope.planHeader(
                 body = "Assign one of your templates or build a plan just for this client.",
                 action = {
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        OutlinedButton(onClick = { onOpenAssign(kind) }) { Text("Assign template") }
-                        OutlinedButton(onClick = { onNewPlan(kind) }) { Text("Create new") }
+                        NeutralButton("Assign template", { onOpenAssign(kind) }, size = ButtonSize.Sm)
+                        NeutralButton("Create new", { onNewPlan(kind) }, size = ButtonSize.Sm)
                     }
                 },
             )
@@ -408,9 +468,9 @@ private fun LazyListScope.planHeader(
                 Text(planName.orEmpty(), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
                 notes?.takeIf { it.isNotBlank() }?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    AssistChip(onClick = { onEditPlan(kind, planId) }, label = { Text("Edit") }, leadingIcon = { Icon(Icons.Default.Edit, null) })
-                    AssistChip(onClick = { onOpenAssign(kind) }, label = { Text("Assign template") })
-                    AssistChip(onClick = { onNewPlan(kind) }, label = { Text("Create new") }, leadingIcon = { Icon(Icons.Default.Add, null) })
+                    TintedButton("Edit", onClick = { onEditPlan(kind, planId) }, size = ButtonSize.Sm, icon = Icons.Default.Edit)
+                    NeutralButton("Assign template", onClick = { onOpenAssign(kind) }, size = ButtonSize.Sm)
+                    NeutralButton("Create new", onClick = { onNewPlan(kind) }, size = ButtonSize.Sm, icon = Icons.Default.Add)
                 }
             }
         }
@@ -472,7 +532,7 @@ private fun LazyListScope.mealTab(
                 Text(meal.name, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
                 meal.timeHint?.let { Text(it, style = MaterialTheme.typography.labelMedium) }
             }
-            Text(meal.macros().summary(), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
+            Text(meal.macros().summary(), style = MaterialTheme.typography.labelMedium, color = LocalAppColors.current.accText)
             meal.sortedItems.forEach { item ->
                 val food = item.food
                 Text("${food?.name ?: "Food"} · ${item.grams.fmt()} g" + (food?.let { " · ${it.macrosFor(item.grams).kcal.fmt(0)} kcal" } ?: ""))
@@ -508,21 +568,12 @@ private fun LazyListScope.checkinsTab(checkins: List<Checkin>, onOpenCheckin: (S
         return
     }
     items(checkins, key = { it.id }) { checkin ->
-        Card(Modifier.fillMaxWidth().clickable { onOpenCheckin(checkin.id) }) {
-            ListItem(
-                headlineContent = { Text(checkin.weekLabel()) },
-                supportingContent = {
-                    Text(listOfNotNull(checkin.weight?.let { "${it.fmt()} kg" }, "${checkin.photos.size} photos").joinToString(" · "))
-                },
-                trailingContent = {
-                    val reviewed = checkin.status == CheckinStatus.Reviewed
-                    Text(
-                        if (reviewed) "Reviewed" else "To review",
-                        color = if (reviewed) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.error,
-                        style = MaterialTheme.typography.labelLarge,
-                    )
-                },
-                colors = ListItemDefaults.colors(containerColor = Color.Transparent),
+        AppCard(Modifier.fillMaxWidth(), onClick = { onOpenCheckin(checkin.id) }) {
+            val reviewed = checkin.status == CheckinStatus.Reviewed
+            ListRow(
+                title = checkin.weekLabel(),
+                subtitle = listOfNotNull(checkin.weight?.let { "${it.fmt()} kg" }, "${checkin.photos.size} photos").joinToString(" · "),
+                trailing = { Tag(if (reviewed) "Reviewed" else "To review", danger = !reviewed) },
             )
         }
     }
@@ -592,17 +643,13 @@ private fun AssignTemplateDialog(
                             modifier = Modifier.padding(bottom = 8.dp),
                         )
                     }
-                    items(templates, key = { it.id }) { template ->
-                        ListItem(
-                            headlineContent = { Text(template.name) },
-                            modifier = Modifier.clickable { onAssign(template.id) },
-                        )
-                        HorizontalDivider()
+                    itemsIndexed(templates, key = { _, it -> it.id }) { index, template ->
+                        ListRow(title = template.name, showDivider = index > 0, onClick = { onAssign(template.id) })
                     }
                 }
             }
         },
         confirmButton = {},
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
+        dismissButton = { GhostButton("Cancel", onDismiss, size = ButtonSize.Sm, dim = true) },
     )
 }

@@ -13,3 +13,9 @@ data class CheckinDetailDestination(val checkinId: String)
 
 @Serializable
 data object ClientSettingsDestination
+
+@Serializable
+data object CheckinFormDestination
+
+@Serializable
+data class ExerciseDetailDestination(val workoutExerciseId: String)
