@@ -34,15 +34,16 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import ch.coachapp.core.Dates
 import ch.coachapp.core.ui.Centered
+import ch.coachapp.core.ui.ChartCard
 import ch.coachapp.core.ui.EmptyState
 import ch.coachapp.core.ui.ErrorBox
 import ch.coachapp.core.ui.InfoCard
-import ch.coachapp.core.ui.ChartCard
 import ch.coachapp.core.ui.LoadingBox
 import ch.coachapp.core.ui.LocalChartColors
 import ch.coachapp.core.ui.RingRow
-import ch.coachapp.core.ui.StatRing
 import ch.coachapp.core.ui.SectionHeader
+import ch.coachapp.core.ui.StatRing
+import ch.coachapp.core.ui.bottomBarInset
 import ch.coachapp.data.model.Meal
 import ch.coachapp.data.model.SupplementItem
 import ch.coachapp.domain.macros
@@ -84,7 +85,10 @@ fun TodayScreen(
         state.loading -> LoadingBox()
         state.error != null -> ErrorBox(state.error, onRetry)
         else -> Centered {
-            LazyColumn(contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            LazyColumn(
+                contentPadding = PaddingValues(16.dp, 16.dp, 16.dp, 16.dp + bottomBarInset()),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
                 item {
                     Text("${Dates.dayName(state.date)}, ${Dates.format(state.date)}", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }

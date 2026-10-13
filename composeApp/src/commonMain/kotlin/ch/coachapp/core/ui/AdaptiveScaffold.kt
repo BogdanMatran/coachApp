@@ -1,24 +1,62 @@
 package ch.coachapp.core.ui
 
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.material3.Icon
-import androidx.compose.material3.NavigationBar
-import androidx.compose.material3.NavigationBarItem
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationRail
 import androidx.compose.material3.NavigationRailItem
+import androidx.compose.material3.NavigationRailItemDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.staticCompositionLocalOf
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 
 /** Width from which the app switches from a bottom bar to a navigation rail. */
 val WideLayoutBreakpoint = 840.dp
+
+/**
+ * Height of the bottom navigation bar, or zero where there is none (the rail layout, and every
+ * screen pushed on top of a tab). Content runs the full height of the screen and the bar floats
+ * over it, so a scrollable adds this to the bottom of its content padding to let the last item
+ * clear the bar. Read it with [bottomBarInset].
+ *
+ * On iOS the bar is the native UITabBar, and the iOS entry points provide the screen's bottom
+ * safe-area inset here instead, which covers the tab bar once a screen extends under it.
+ */
+val LocalBottomBarHeight = staticCompositionLocalOf { 0.dp }
+
+/** The space a scrollable should leave at its bottom for the navigation bar. */
+@Composable
+fun bottomBarInset(): Dp = LocalBottomBarHeight.current
 
 /**
  * Top-level scaffold: bottom navigation bar on phones, navigation rail on tablets and the web.
@@ -32,40 +70,112 @@ fun AdaptiveScaffold(
     railHeader: (@Composable () -> Unit)? = null,
     content: @Composable (wide: Boolean) -> Unit,
 ) {
+    val colors = LocalAppColors.current
     BoxWithConstraints(Modifier.fillMaxSize()) {
         val wide = maxWidth >= WideLayoutBreakpoint
         if (wide) {
             Row(Modifier.fillMaxSize()) {
-                NavigationRail(header = railHeader?.let { { it() } }) {
+                NavigationRail(
+                    containerColor = colors.bgEl,
+                    header = railHeader?.let { { it() } },
+                ) {
                     items.forEachIndexed { index, item ->
                         NavigationRailItem(
                             selected = index == selectedIndex,
                             onClick = { onSelect(index) },
-                            icon = { Icon(item.icon, contentDescription = null) },
-                            label = { Text(item.label) },
+                            icon = { Icon(item.icon, contentDescription = null, modifier = Modifier.size(25.dp)) },
+                            label = { Text(item.label, style = MaterialTheme.typography.labelSmall) },
+                            colors = NavigationRailItemDefaults.colors(
+                                selectedIconColor = colors.acc,
+                                selectedTextColor = colors.acc,
+                                unselectedIconColor = colors.label3,
+                                unselectedTextColor = colors.label3,
+                                // openGym tints the icon and label; there is no pill behind them.
+                                indicatorColor = Color.Transparent,
+                            ),
                         )
                     }
                 }
                 Box(Modifier.weight(1f)) { content(true) }
             }
         } else {
-            // Screens own their top bars (which apply the status bar inset), so only the bottom bar adds padding here.
+            val density = LocalDensity.current
+            var barHeight by remember { mutableStateOf(0.dp) }
+            // Screens own their top bars (which apply the status bar inset), so only the bottom bar
+            // adds padding here.
             Scaffold(
                 contentWindowInsets = WindowInsets(0, 0, 0, 0),
                 bottomBar = {
-                    NavigationBar {
-                        items.forEachIndexed { index, item ->
-                            NavigationBarItem(
-                                selected = index == selectedIndex,
-                                onClick = { onSelect(index) },
-                                icon = { Icon(item.icon, contentDescription = null) },
-                                label = { Text(item.label) },
-                            )
-                        }
-                    }
+                    BottomBar(
+                        items,
+                        selectedIndex,
+                        onSelect,
+                        Modifier.onSizeChanged { barHeight = with(density) { it.height.toDp() } },
+                    )
                 },
             ) { padding ->
-                Box(Modifier.fillMaxSize().padding(padding)) { content(false) }
+                // The bottom padding is deliberately not consumed: content runs under the bar, the
+                // way it does in a native app. Scrollables reserve the height with bottomBarInset()
+                // instead, so the last item can still be scrolled clear of it.
+                CompositionLocalProvider(LocalBottomBarHeight provides barHeight) {
+                    Box(Modifier.fillMaxSize().padding(top = padding.calculateTopPadding())) {
+                        content(false)
+                    }
+                }
+            }
+        }
+    }
+}
+
+/**
+ * The bottom bar is opaque rather than glass: openGym blurs it in the browser, but Compose has no
+ * cross-platform backdrop filter, and openGym's own documented fallback for that case is a solid
+ * elevated backdrop. A hairline keeps it separated from the page.
+ */
+@Composable
+private fun BottomBar(
+    items: List<NavItem>,
+    selectedIndex: Int,
+    onSelect: (Int) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val colors = LocalAppColors.current
+    Row(
+        modifier
+            .fillMaxWidth()
+            .background(colors.bgEl)
+            .drawBehind {
+                drawLine(colors.sep, Offset(0f, 0f), Offset(size.width, 0f), strokeWidth = HairlineWidth.toPx())
+            }
+            .windowInsetsPadding(WindowInsets.navigationBars)
+            .padding(start = 6.dp, end = 6.dp, top = 7.dp, bottom = 6.dp),
+        horizontalArrangement = Arrangement.SpaceAround,
+        verticalAlignment = Alignment.Bottom,
+    ) {
+        items.forEachIndexed { index, item ->
+            val selected = index == selectedIndex
+            val tint = if (selected) colors.acc else colors.label3
+            Column(
+                Modifier
+                    .weight(1f)
+                    .clickable(
+                        interactionSource = rememberPressInteraction(),
+                        indication = null,
+                        onClick = { onSelect(index) },
+                    )
+                    .padding(top = 3.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(3.dp),
+            ) {
+                Icon(item.icon, contentDescription = null, tint = tint, modifier = Modifier.size(25.dp))
+                Text(
+                    item.label,
+                    style = MaterialTheme.typography.labelSmall,
+                    fontWeight = FontWeight.Medium,
+                    color = tint,
+                    textAlign = TextAlign.Center,
+                    maxLines = 1,
+                )
             }
         }
     }

@@ -11,11 +11,12 @@ A Kahunas-style coaching platform. Coaches give each client personalised **worko
 | Area | Status |
 |---|---|
 | Backend (Supabase: schema, RLS, functions, storage, seed) | ✅ Done, with 16 pgTAP RLS tests passing |
+| Exercise library (1,324 imported exercises + pictograms) | ✅ Done; media needs `scripts/sync-exercise-media.sh` per deployment |
 | Auth & onboarding (coach signup, client invite codes, join coach) | ✅ Done, tested on Android |
 | Coach: clients, invites, libraries, plan builders, check-in review | ✅ Done |
 | Client: today, workout session, plans, check-in with photos, history | ✅ Done |
 | Charts: activity heatmap, progress rings, macro donut | ✅ Done, not yet checked visually |
-| Design system (palette, light/dark, shapes) | ✅ Done |
+| Design system (palette, light/dark, shapes, typography) | ✅ Done |
 | Android app | ✅ Builds and runs (emulator tested) |
 | Web (wasmJs) | ✅ Builds and runs on the dev server; layout not checked visually |
 | iOS: native SwiftUI shell around the Kotlin screens | 🟡 Kotlin side builds; Swift side being tested in Xcode |
@@ -29,7 +30,7 @@ A Kahunas-style coaching platform. Coaches give each client personalised **worko
 - **AGP 9.4 / Gradle 9.8**. AGP 9 forbids `kotlin-multiplatform` and `com.android.application` in one module, so there's a separate `androidApp` module.
 - **Supabase** (supabase-kt 3.8: Auth, Postgrest, Storage) over Ktor 3 (OkHttp, Darwin and Js engines).
 - **Koin 4.2** for DI, **Navigation Compose 2.9** (type-safe routes) on Android and web.
-- **Coil 3** for images, **FileKit 0.16** for the photo picker, **kotlinx-datetime/serialization**.
+- **Coil 3** for images (Ktor fetcher, so it works on every target), **FileKit 0.16** for the photo picker, **kotlinx-datetime/serialization**.
 - **SwiftUI** (iOS 17+) shell on iOS: native TabView and NavigationStack, with Liquid Glass bars on iOS 26 and later.
 
 ---
@@ -117,21 +118,47 @@ docs/PLAN.md                 This file
 
 ## 5. Design system
 
-- **Palette:** System colours (Magenta, Blue, Green, Yellow and Red, each in 400 to 100 shades) plus Neutrals.
-  - Light: background `#F8F8FF`, white cards, text `#0D0A2C` and `#615E83`, primary Magenta 400.
-  - Dark (derived): background `#0D0A2C`, cards `#1A1740`, primary Magenta 300.
+Modelled on [openGym](https://github.com/DuarteSantos8/openGym) (`frontend/src/index.css`), which is
+Apple's HIG rebuilt in CSS. Four rules drive it:
+
+1. **One type scale, mostly regular weight.** Size carries the hierarchy; weight carries meaning
+   (600 for a title, 400 for its content).
+2. **A neutral surface ramp.** Height is expressed by stepping up `bg → bgEl → surface → surface2 →
+   surface3`, never by a shadow. Cards are flat and have no border.
+3. **Hairlines, not borders.** Separators are `0.5dp` and inset past the icon rail, so a list reads
+   as one object rather than a stack of outlined boxes.
+4. **Motion acknowledges, it does not animate.** A press scales by 2–8% over 140ms. Ripples are off
+   app-wide (`NoIndication`); `Modifier.pressScale` is what a tap looks like.
+
+- **Palette** (`core/ui/Theme.kt`, `AppColors` via `LocalAppColors`): a green accent over the iOS
+  system colours, in both themes.
+
+  | | dark | light |
+  |---|---|---|
+  | `bg` / `bgEl` | `#000000` / `#0E0E10` | `#F2F2F7` / `#F7F7FA` |
+  | `surface` / `surface2` / `surface3` | `#1C1C1E` / `#2C2C2E` / `#3A3A3C` | `#FFFFFF` / `#ECECEF` / `#E3E3E8` |
+  | `label` → `label4` | white at 100/60/32/18% | black at 100/60/30/16% |
+  | accent | `#30D158` | `#34C759` |
+
+  `onAcc` is **black in both themes**: white on the light green is 2.22:1 and fails AA for 17sp/600
+  button text, where black scores 9.46:1.
+- **Typography:** 34/28/22/17/16/15/13/12sp, negative tracking that tightens as the size grows, and
+  `tnum` on every style so numbers never jitter. System font (`FontFamily.Default`) — openGym loads
+  no webfont either.
+- **Shapes:** 8 / 12 / **14 (cards)** / 16 / 22dp.
 - **`ChartColors`** (via `LocalChartColors`):
-  - Workouts magenta, meals green, supplements blue.
+  - Workouts green, meals teal, supplements blue.
   - Protein blue, carbs yellow, fat red.
-  - Heatmap levels follow the Magenta ramp.
-- **Shapes:** large corners (cards 20–24dp).
+  - Heatmap levels are opaque blends towards the accent: `lerp(surface2, acc, 30/55/78/100%)`.
 - **Charts** (`core/ui/Charts.kt`):
   - `ProgressRing` and `StatRing`: animated rings with rounded ends.
   - `SegmentedRing` and `MacroDonut`: macro split by kcal.
   - `ActivityHeatmap`: GitHub-style grid. It fits as many weeks as the screen width allows, Monday is the first row, tapping a day shows details.
   - `ActivityCard`: heatmap plus 7-day completion, workouts in the last four weeks, and streak.
 - **Heat level** (`domain/Activity.kt`): meal and supplement completion of 0, more than 0, 50% or more, or 85% or more gives level 0–3. A workout adds one level (minimum 2, maximum 4).
-- **iOS:** the asset catalog colours `AccentColor`, `AppBackground` and `LaunchBackground` match the palette.
+- **iOS:** the asset catalog colours `AccentColor`, `AppBackground` and `LaunchBackground` match the
+  palette. The navigation and tab bars there are native SwiftUI, so `ScreenTopBar` and `PrimaryFab`
+  only style Android and the web — see the gaps below.
 
 ---
 
@@ -177,13 +204,21 @@ open iosApp/iosApp.xcodeproj                            # iOS: Cmd+R in Xcode
 ## 8. Known gaps
 
 - [ ] **iOS shell:** finish the Xcode build and test on a device. Large titles don't collapse when scrolling, because Compose content isn't a `UIScrollView`.
-- [ ] **Rotunda font:** waiting for the font files. Then wire them in through Compose resources and register them in the iOS `Info.plist` (`UIAppFonts`) for the native bars.
+- [ ] **Rotunda font:** waiting for the font files. The type scale is in place and uses the system font; swapping `FontFamily.Default` in `core/ui/Theme.kt` for a Compose-resources family is the whole change, plus `UIAppFonts` in the iOS `Info.plist` for the native bars.
 - [ ] **Wide screens:** no list-detail split yet (the client list and detail could sit side by side).
 - [ ] **Number fields:** in the builders, clearing a required number field keeps the last valid value.
 - [ ] **Coach client detail:** makes 9 requests to load; replace them with one aggregate function or view.
 - [ ] **Previous sets:** `LogRepository.lastSets` scans the last 20 workout logs; use a query keyed by exercise.
 - [ ] **Time zones:** activity days use the server's time zone (UTC), so late-evening logs can land on the next day. Store or pass the client's time zone.
-- [ ] **Light-mode contrast:** check text links in Magenta 400.
+- [ ] **Exercise animations:** only Android decodes animated GIFs (Coil ships `coil-gif` for Android
+      only), so iOS and the web show the first frame. The fix is to transcode to animated WebP in
+      `scripts/sync-exercise-media.sh` and store a third path per exercise.
+- [ ] **iOS chrome:** `ScreenTopBar` and `PrimaryFab` return early on iOS, so the new large-title
+      header and circular bar actions are Android and web only. The native SwiftUI bars in `iosApp/`
+      need a matching pass; their colours already follow via the asset catalog.
+- [ ] **Page gutter:** `Centered` was deliberately left at width-capping only. openGym puts the 16dp
+      page gutter in the page container, but our screens already pad themselves, so moving it would
+      double up. Worth consolidating when screens are next touched.
 
 ---
 

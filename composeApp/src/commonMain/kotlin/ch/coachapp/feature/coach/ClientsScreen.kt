@@ -44,6 +44,7 @@ import ch.coachapp.core.ui.LocalChartColors
 import ch.coachapp.core.ui.PrimaryButton
 import ch.coachapp.core.ui.ProgressRing
 import ch.coachapp.core.ui.StatChip
+import ch.coachapp.core.ui.bottomBarInset
 import ch.coachapp.data.model.ClientOverview
 import ch.coachapp.data.repository.CoachRepository
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -121,7 +122,7 @@ fun ClientsScreen(
                 )
                 else -> LazyColumn(
                     Modifier.fillMaxSize(),
-                    contentPadding = PaddingValues(16.dp, 8.dp, 16.dp, 96.dp),
+                    contentPadding = PaddingValues(16.dp, 8.dp, 16.dp, 96.dp + bottomBarInset()),
                     verticalArrangement = Arrangement.spacedBy(12.dp),
                 ) {
                     item {

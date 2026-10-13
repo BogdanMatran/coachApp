@@ -182,7 +182,7 @@ private fun LegendRow(segment: RingSegment) {
 // Activity heatmap
 // ---------------------------------------------------------------------------
 
-private val HeatCell = 13.dp
+private val HeatCell = 11.dp
 private val HeatGap = 3.dp
 private val DayLabelWidth = 28.dp
 private val MonthNames = listOf("Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec")
@@ -292,7 +292,7 @@ private fun HeatGrid(columns: List<List<DayActivity?>>, heat: List<Color>, selec
 private fun HeatLegend(heat: List<Color>) {
     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(3.dp)) {
         Text("Less", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        heat.forEach { Box(Modifier.size(10.dp).clip(RoundedCornerShape(2.dp)).background(it)) }
+        heat.forEach { Box(Modifier.size(10.dp).clip(RoundedCornerShape(3.dp)).background(it)) }
         Text("More", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
 }

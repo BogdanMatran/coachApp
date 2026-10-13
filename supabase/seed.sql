@@ -44,12 +44,34 @@ insert into public.exercises (id, name, muscle_group, equipment) values
     ('10000000-0000-4000-a000-000000000002', 'Romanian Deadlift',   'Hamstrings','Barbell'),
     ('10000000-0000-4000-a000-000000000003', 'Bench Press',         'Chest',     'Barbell'),
     ('10000000-0000-4000-a000-000000000004', 'Overhead Press',      'Shoulders', 'Barbell'),
-    ('10000000-0000-4000-a000-000000000005', 'Pull-up',             'Back',      'Bodyweight'),
+    ('10000000-0000-4000-a000-000000000005', 'Pull-up',             'Back',      'Body Weight'),
     ('10000000-0000-4000-a000-000000000006', 'Seated Cable Row',    'Back',      'Cable'),
     ('10000000-0000-4000-a000-000000000007', 'Walking Lunge',       'Legs',      'Dumbbell'),
     ('10000000-0000-4000-a000-000000000008', 'Lateral Raise',       'Shoulders', 'Dumbbell'),
-    ('10000000-0000-4000-a000-000000000009', 'Plank',               'Core',      'Bodyweight'),
+    ('10000000-0000-4000-a000-000000000009', 'Plank',               'Core',      'Body Weight'),
     ('10000000-0000-4000-a000-000000000010', 'Incline DB Press',    'Chest',     'Dumbbell');
+
+-- Give the demo exercises the pictograms of their counterparts in the imported library
+-- (20261012000002_exercise_library_seed.sql). They keep their own ids so the demo plans and logs
+-- below still resolve, and they deliberately carry no ext_id: that key belongs to the import.
+-- "Plank" has no close upstream match, so it stays without media and exercises the placeholder.
+update public.exercises demo
+set image_path = src.image_path,
+    gif_path   = src.gif_path,
+    body_part  = src.body_part,
+    target     = src.target
+from public.exercises src, (values
+    ('10000000-0000-4000-a000-000000000001', '0043'), -- Back Squat        <- barbell full squat
+    ('10000000-0000-4000-a000-000000000002', '0085'), -- Romanian Deadlift
+    ('10000000-0000-4000-a000-000000000003', '0025'), -- Bench Press
+    ('10000000-0000-4000-a000-000000000004', '0091'), -- Overhead Press    <- barbell seated overhead press
+    ('10000000-0000-4000-a000-000000000005', '0652'), -- Pull-up
+    ('10000000-0000-4000-a000-000000000006', '0861'), -- Seated Cable Row
+    ('10000000-0000-4000-a000-000000000007', '1460'), -- Walking Lunge
+    ('10000000-0000-4000-a000-000000000008', '0334'), -- Lateral Raise
+    ('10000000-0000-4000-a000-000000000010', '0314')  -- Incline DB Press  <- dumbbell incline bench press
+) as m(demo_id, ext_id)
+where demo.id = m.demo_id::uuid and src.ext_id = m.ext_id;
 
 insert into public.foods (id, name, kcal, protein, carbs, fat) values
     ('20000000-0000-4000-a000-000000000001', 'Oats',                 389, 16.9, 66.3, 6.9),

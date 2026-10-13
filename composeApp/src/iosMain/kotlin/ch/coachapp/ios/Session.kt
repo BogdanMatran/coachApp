@@ -23,6 +23,8 @@ data class SessionSnapshot(
     val kind: SessionKind,
     val profileId: String?,
     val firstName: String,
+    val displayName: String,
+    val email: String?,
     val message: String?,
 )
 
@@ -50,9 +52,9 @@ class SessionBridge : KoinComponent {
 }
 
 private fun AuthState.toSnapshot(): SessionSnapshot = when (this) {
-    AuthState.Loading -> SessionSnapshot(SessionKind.Loading, null, "", null)
-    AuthState.SignedOut -> SessionSnapshot(SessionKind.SignedOut, null, "", null)
-    is AuthState.Error -> SessionSnapshot(SessionKind.Error, null, "", message)
+    AuthState.Loading -> SessionSnapshot(SessionKind.Loading, null, "", "", null, null)
+    AuthState.SignedOut -> SessionSnapshot(SessionKind.SignedOut, null, "", "", null, null)
+    is AuthState.Error -> SessionSnapshot(SessionKind.Error, null, "", "", null, message)
     is AuthState.SignedIn -> SessionSnapshot(
         kind = when {
             profile.role == Role.Coach -> SessionKind.Coach
@@ -61,6 +63,8 @@ private fun AuthState.toSnapshot(): SessionSnapshot = when (this) {
         },
         profileId = profile.id,
         firstName = profile.displayName.substringBefore(' '),
+        displayName = profile.displayName,
+        email = profile.email,
         message = null,
     )
 }

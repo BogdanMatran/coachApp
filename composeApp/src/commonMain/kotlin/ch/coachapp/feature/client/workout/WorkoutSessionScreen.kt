@@ -42,10 +42,12 @@ import ch.coachapp.core.ui.BarAction
 import ch.coachapp.core.ui.Centered
 import ch.coachapp.core.ui.ConfirmDialog
 import ch.coachapp.core.ui.ErrorBox
+import ch.coachapp.core.ui.ExerciseAnimation
 import ch.coachapp.core.ui.InfoCard
 import ch.coachapp.core.ui.LoadingBox
 import ch.coachapp.core.ui.NumberField
 import ch.coachapp.core.ui.PrimaryButton
+import ch.coachapp.core.ui.Tag
 import ch.coachapp.data.model.SetLog
 import ch.coachapp.feature.client.prescription
 import org.koin.compose.viewmodel.koinViewModel
@@ -158,7 +160,12 @@ private fun ExerciseCard(
 ) {
     val we = session.exercise
     InfoCard {
+        // The demo plate: how the movement looks, before the numbers for it.
+        we.exercise?.let { ExerciseAnimation(it) }
         Text(we.exercise?.name ?: "Exercise", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+        we.exercise?.attributes?.takeIf { it.isNotEmpty() }?.let { attributes ->
+            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) { attributes.forEach { Tag(it) } }
+        }
         Text(prescription(we), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.primary)
         we.notes?.takeIf { it.isNotBlank() }?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
         if (session.previous.isNotEmpty()) {

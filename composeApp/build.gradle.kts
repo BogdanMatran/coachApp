@@ -85,7 +85,15 @@ kotlin {
         )
     }
 
+    // iOS and wasmJs both render through Skia, and Coil ships no animated decoder for either, so
+    // they share one Skiko-based GIF player (core/ui/AnimatedImage.skiko.kt).
+    applyDefaultHierarchyTemplate()
+
     sourceSets {
+        val skikoMain by creating { dependsOn(commonMain.get()) }
+        iosMain.get().dependsOn(skikoMain)
+        wasmJsMain.get().dependsOn(skikoMain)
+
         commonMain {
             kotlin.srcDir(generateAppConfig)
             dependencies {
@@ -123,6 +131,7 @@ kotlin {
         androidMain.dependencies {
             implementation(libs.ktor.client.okhttp)
             implementation(libs.androidx.activity.compose)
+            implementation(libs.coil.gif)
         }
         iosMain.dependencies {
             implementation(libs.ktor.client.darwin)

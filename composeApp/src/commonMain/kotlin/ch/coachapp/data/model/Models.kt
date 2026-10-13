@@ -58,8 +58,19 @@ data class Exercise(
     val equipment: String? = null,
     @SerialName("video_url") val videoUrl: String? = null,
     val instructions: String? = null,
+    /** Upstream id of an exercise imported from the shared library; null for a coach's own. */
+    @SerialName("ext_id") val extId: String? = null,
+    @SerialName("body_part") val bodyPart: String? = null,
+    val target: String? = null,
+    @SerialName("secondary_muscles") val secondaryMuscles: List<String> = emptyList(),
+    /** Filenames inside the `exercise-media` bucket; resolve them with `exerciseMediaUrl`. */
+    @SerialName("image_path") val imagePath: String? = null,
+    @SerialName("gif_path") val gifPath: String? = null,
 ) {
     val isGlobal: Boolean get() = coachId == null
+
+    /** The chips shown under an exercise name: what it trains and what it needs. */
+    val attributes: List<String> get() = listOfNotNull(muscleGroup, equipment)
 }
 
 @Serializable

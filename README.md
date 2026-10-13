@@ -4,6 +4,7 @@ A coaching platform in the style of Kahunas. Coaches build personalised **workou
 
 - **Client app**: Compose Multiplatform on Android, iOS and Web (wasmJs). The web build doubles as the coach dashboard.
 - **Backend**: Supabase (Postgres + Row Level Security, Auth, Storage).
+- **Exercise library**: 1,324 exercises with pictograms, imported from ExerciseDB (see [NOTICE.md](NOTICE.md)).
 - **iOS**: a native SwiftUI shell (tabs, navigation bars) hosting the shared Kotlin screens.
 
 See **[docs/PLAN.md](docs/PLAN.md)** for architecture, status, known gaps and the roadmap.
@@ -23,8 +24,9 @@ composeApp/        Shared KMP module (UI, ViewModels, repositories)
     di/            Koin modules
 androidApp/        Android application (AGP 9 requires a separate app module)
 iosApp/            Xcode project embedding the ComposeApp framework
+scripts/           Exercise library generator and the media sync (see NOTICE.md)
 supabase/
-  migrations/      Schema, RLS, functions (save/assign plans, invites), storage
+  migrations/      Schema, RLS, functions (save/assign plans, invites), storage, exercise library
   seed.sql         Demo accounts and data
   tests/           pgTAP RLS tests
 ```
@@ -38,7 +40,11 @@ Requirements: JDK 17+ (Android Studio's bundled JBR works), Docker and Node (for
 npx supabase start          # applies migrations + seed
 npx supabase test db        # RLS tests
 
-# 2. Apps (the defaults point at the local stack)
+# 2. Exercise pictograms (optional, ~140 MB, once per deployment)
+export SUPABASE_SERVICE_ROLE_KEY=$(npx supabase status -o env | grep SERVICE_ROLE_KEY | cut -d= -f2- | tr -d '"')
+scripts/sync-exercise-media.sh
+
+# 3. Apps (the defaults point at the local stack)
 ./gradlew :androidApp:installDebug                       # Android emulator (uses 10.0.2.2)
 ./gradlew :composeApp:wasmJsBrowserDevelopmentRun        # Web, http://localhost:8080
 open iosApp/iosApp.xcodeproj                             # iOS: run from Xcode
@@ -71,6 +77,7 @@ Invite code `WELCOME1` signs a new client up under the demo coach.
 ## How it works
 
 - **Roles**: `profiles.role` is set at signup by the `handle_new_user` trigger. Clients join a coach with an invite code: it is checked by `check_invite()` before signup and redeemed atomically in the trigger, or later with `redeem_invite()`.
+- **Exercise library**: the 1,324 global exercises (`coach_id = null`) are seeded by a migration generated with `scripts/build-exercise-library.mjs`; a coach can add their own on top. Rows store the media *filename*, and the client resolves it against the public `exercise-media` bucket, which `scripts/sync-exercise-media.sh` fills from upstream. Without that step the app simply shows a placeholder glyph. The images are third-party with unresolved ownership — read [NOTICE.md](NOTICE.md) before mirroring them anywhere you publish.
 - **Templates vs. client plans**: a plan with `client_id = null` is a template. `assign_plan(kind, template, client)` deep-copies it as the client's single active plan.
 - **Plan builders** send the whole tree to `save_workout_plan` / `save_meal_plan` / `save_supplement_plan`. Existing child ids are updated in place, so logs keep their references.
 - **Security**: everything goes through RLS. Coaches see only their own clients, and clients read their own plans and write only their own logs and check-ins. A trigger stops clients from reviewing their own check-ins and stops coaches from editing client metrics.

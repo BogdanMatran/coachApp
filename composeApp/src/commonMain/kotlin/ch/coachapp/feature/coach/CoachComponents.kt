@@ -1,6 +1,7 @@
 package ch.coachapp.feature.coach
 
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.WindowInsets
@@ -36,6 +37,8 @@ import ch.coachapp.core.toDoubleOrNullLenient
 import ch.coachapp.core.ui.BarAction
 import ch.coachapp.core.ui.PrimaryFab
 import ch.coachapp.core.ui.ScreenTopBar
+import ch.coachapp.core.ui.bottomBarInset
+import ch.coachapp.core.ui.clearFocusOnTap
 
 /**
  * Scaffold for the top-level tabs. The outer AdaptiveScaffold already handles the
@@ -49,10 +52,13 @@ fun TabScaffold(
     snackbarHostState: SnackbarHostState? = null,
     content: @Composable (PaddingValues) -> Unit,
 ) {
+    // The content runs under the navigation bar, so the two things this scaffold floats at the
+    // bottom have to step over it themselves.
+    val overBar = Modifier.padding(bottom = bottomBarInset())
     Scaffold(
         topBar = { ScreenTopBar(title = title, actions = actions, primary = primary) },
-        floatingActionButton = { PrimaryFab(primary) },
-        snackbarHost = { snackbarHostState?.let { SnackbarHost(it) } },
+        floatingActionButton = { Box(overBar) { PrimaryFab(primary) } },
+        snackbarHost = { snackbarHostState?.let { SnackbarHost(it, overBar) } },
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
         content = content,
     )
@@ -116,6 +122,8 @@ fun <T> LibraryPickerDialog(
     itemSubtitle: (T) -> String?,
     onPick: (T) -> Unit,
     onDismiss: () -> Unit,
+    /** Optional leading slot, used by the exercise picker to show the pictogram. */
+    itemLeading: (@Composable (T) -> Unit)? = null,
 ) {
     var query by remember { mutableStateOf("") }
     val filtered = remember(items, query) {
@@ -128,7 +136,8 @@ fun <T> LibraryPickerDialog(
         onDismissRequest = onDismiss,
         title = { Text(title) },
         text = {
-            Column {
+            // A dialog composes in its own window, so it needs its own tap-to-dismiss handler.
+            Column(Modifier.clearFocusOnTap()) {
                 OutlinedTextField(
                     value = query,
                     onValueChange = { query = it },
@@ -147,6 +156,7 @@ fun <T> LibraryPickerDialog(
                 LazyColumn(Modifier.heightIn(max = 380.dp).padding(top = 8.dp)) {
                     items(filtered) { item ->
                         ListItem(
+                            leadingContent = itemLeading?.let { { it(item) } },
                             headlineContent = { Text(itemLabel(item)) },
                             supportingContent = itemSubtitle(item)?.let { { Text(it) } },
                             modifier = Modifier.clickable { onPick(item) },

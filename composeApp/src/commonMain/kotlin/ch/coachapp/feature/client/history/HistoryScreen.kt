@@ -33,6 +33,7 @@ import ch.coachapp.core.ui.EmptyState
 import ch.coachapp.core.ui.ErrorBox
 import ch.coachapp.core.ui.InfoCard
 import ch.coachapp.core.ui.LoadingBox
+import ch.coachapp.core.ui.bottomBarInset
 import ch.coachapp.core.ui.weekLabel
 import ch.coachapp.data.model.Checkin
 import ch.coachapp.data.model.WorkoutLog
@@ -67,7 +68,10 @@ fun HistoryScreen(
             when {
                 state.loading -> LoadingBox()
                 state.error != null -> ErrorBox(state.error, onRetry)
-                else -> LazyColumn(contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                else -> LazyColumn(
+                    contentPadding = PaddingValues(16.dp, 16.dp, 16.dp, 16.dp + bottomBarInset()),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
                     if (state.activity.isNotEmpty()) {
                         item(key = "activity") { ActivityCard(state.activity, Modifier.padding(bottom = 8.dp)) }
                     }

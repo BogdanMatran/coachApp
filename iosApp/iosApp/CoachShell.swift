@@ -23,6 +23,7 @@ struct CoachShell: View {
                         onOpenInvites: { nav.push(.invites) }
                     )
                 }
+                .contentUnderTabBar()
             }
             .tabItem { Label("Clients", systemImage: "person.2") }
 
@@ -32,6 +33,7 @@ struct CoachShell: View {
                         nav.push(.builder(kind: kind, planId: planId, clientId: nil))
                     }
                 }
+                .contentUnderTabBar()
             }
             .tabItem { Label("Plans", systemImage: "list.bullet.clipboard") }
 
@@ -39,6 +41,7 @@ struct CoachShell: View {
                 ComposeScreen(title: "Library", displayMode: .large) { host in
                     IosScreensKt.coachLibraryScreen(host: host)
                 }
+                .contentUnderTabBar()
             }
             .tabItem { Label("Library", systemImage: "books.vertical") }
 
@@ -51,6 +54,7 @@ struct CoachShell: View {
                         onSignOut: { session.signOut() }
                     )
                 }
+                .contentUnderTabBar()
             }
             .tabItem { Label("Settings", systemImage: "gearshape") }
         }

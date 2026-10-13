@@ -8,15 +8,36 @@ import ch.coachapp.data.model.Supplement
 import io.github.jan.supabase.SupabaseClient
 import io.github.jan.supabase.auth.auth
 import io.github.jan.supabase.postgrest.from
+import io.github.jan.supabase.postgrest.postgrest
+import io.github.jan.supabase.postgrest.query.Columns
 import io.github.jan.supabase.postgrest.query.Order
+import kotlinx.serialization.SerialName
+import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonObjectBuilder
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 
+/** Filters for the exercise library; null means "any". */
+data class ExerciseFilter(
+    val query: String = "",
+    val bodyPart: String? = null,
+    val equipment: String? = null,
+)
+
 /** Exercise, food and supplement libraries: global items plus the coach's own. */
 interface LibraryRepository {
-    suspend fun exercises(): Result<List<Exercise>>
+    /**
+     * A page of the exercise library. The imported library is ~1,300 rows with a paragraph of
+     * instructions each, so the list query filters and pages on the server and leaves
+     * `instructions` behind; [exercise] fetches the full row when one is opened.
+     */
+    suspend fun exercises(filter: ExerciseFilter = ExerciseFilter(), limit: Int = 60, offset: Int = 0): Result<List<Exercise>>
+
+    suspend fun exercise(id: String): Result<Exercise>
+
+    /** The distinct body parts and equipment present in the library, for the filter chips. */
+    suspend fun exerciseFacets(): Result<ExerciseFacets>
     suspend fun foods(): Result<List<Food>>
     suspend fun supplements(): Result<List<Supplement>>
     suspend fun saveExercise(exercise: Exercise): Result<Exercise>
@@ -27,12 +48,43 @@ interface LibraryRepository {
     suspend fun deleteSupplement(id: String): Result<Unit>
 }
 
+/** Distinct values offered as filter chips above the exercise list. */
+@Serializable
+data class ExerciseFacets(
+    @SerialName("body_parts") val bodyParts: List<String> = emptyList(),
+    val equipment: List<String> = emptyList(),
+)
+
+/** Everything a list row needs; `instructions` is deliberately absent. */
+private val ExerciseListColumns = Columns.list(
+    "id", "coach_id", "name", "muscle_group", "equipment", "video_url",
+    "ext_id", "body_part", "target", "secondary_muscles", "image_path", "gif_path",
+)
+
 class SupabaseLibraryRepository(private val client: SupabaseClient) : LibraryRepository {
 
     private fun me(): String = client.auth.currentUserOrNull()?.id ?: throw AppException("Not signed in")
 
-    override suspend fun exercises() = apiCall {
-        client.from("exercises").select { order("name", Order.ASCENDING) }.decodeList<Exercise>()
+    override suspend fun exercises(filter: ExerciseFilter, limit: Int, offset: Int) = apiCall {
+        client.from("exercises").select(ExerciseListColumns) {
+            filter {
+                filter.bodyPart?.let { eq("body_part", it) }
+                filter.equipment?.let { eq("equipment", it) }
+                filter.query.trim().takeIf { it.isNotEmpty() }?.let { ilike("name", "%$it%") }
+            }
+            order("name", Order.ASCENDING)
+            range(offset.toLong(), (offset + limit - 1).toLong())
+        }.decodeList<Exercise>()
+    }
+
+    override suspend fun exercise(id: String) = apiCall {
+        client.from("exercises").select { filter { eq("id", id) } }.decodeSingle<Exercise>()
+    }
+
+    override suspend fun exerciseFacets() = apiCall {
+        // Aggregated in the database: selecting the two columns and reducing here would be capped
+        // at PostgREST's db-max-rows (1,000) and silently lose any facet in the tail.
+        client.postgrest.rpc("exercise_facets").decodeAs<ExerciseFacets>()
     }
 
     override suspend fun foods() = apiCall {
@@ -50,6 +102,7 @@ class SupabaseLibraryRepository(private val client: SupabaseClient) : LibraryRep
             put("equipment", exercise.equipment?.trim()?.ifEmpty { null })
             put("video_url", exercise.videoUrl?.trim()?.ifEmpty { null })
             put("instructions", exercise.instructions?.trim()?.ifEmpty { null })
+            put("body_part", exercise.bodyPart?.trim()?.ifEmpty { null })
         }.decodeSingle<Exercise>()
     }
 

@@ -1,6 +1,5 @@
 package ch.coachapp.feature.coach
 
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -12,26 +11,29 @@ import androidx.compose.material.icons.automirrored.filled.ExitToApp
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material.icons.filled.Email
-import androidx.compose.material3.Card
 import androidx.compose.material3.Icon
-import androidx.compose.material3.ListItem
-import androidx.compose.material3.ListItemDefaults
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
+import ch.coachapp.core.ui.AppearanceCard
 import ch.coachapp.core.ui.Centered
+import ch.coachapp.core.ui.DangerButton
+import ch.coachapp.core.ui.GroupedList
+import ch.coachapp.core.ui.IconTile
 import ch.coachapp.core.ui.InfoCard
+import ch.coachapp.core.ui.ListRow
+import ch.coachapp.core.ui.LocalAppColors
 import ch.coachapp.core.ui.PrimaryButton
 import ch.coachapp.core.ui.SectionHeader
+import ch.coachapp.core.ui.bottomBarInset
 import ch.coachapp.data.repository.AuthRepository
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -93,7 +95,8 @@ fun SettingsScreen(
     TabScaffold(title = "Settings") { padding ->
         Centered(Modifier.padding(padding)) {
             Column(
-                Modifier.verticalScroll(rememberScrollState()).padding(16.dp),
+                Modifier.verticalScroll(rememberScrollState())
+                    .padding(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 16.dp + bottomBarInset()),
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 SectionHeader("Profile")
@@ -111,33 +114,59 @@ fun SettingsScreen(
                     PrimaryButton("Save", onClick = onSaveName, enabled = state.nameChanged, loading = state.saving)
                 }
 
+                SectionHeader("Appearance")
+                AppearanceCard()
+
                 SectionHeader("Coaching")
-                Card {
-                    SettingsRow("Check-in questions", "The weekly questionnaire your clients fill in", onOpenCheckinTemplate) {
-                        Icon(Icons.AutoMirrored.Filled.List, contentDescription = null)
-                    }
-                    SettingsRow("Invites", "Codes for new clients to join you", onOpenInvites) {
-                        Icon(Icons.Default.Email, contentDescription = null)
-                    }
+                GroupedList {
+                    SettingsRow(
+                        "Check-in questions",
+                        "The weekly questionnaire your clients fill in",
+                        Icons.AutoMirrored.Filled.List,
+                        onOpenCheckinTemplate,
+                    )
+                    SettingsRow(
+                        "Invites",
+                        "Codes for new clients to join you",
+                        Icons.Default.Email,
+                        onOpenInvites,
+                        showDivider = true,
+                    )
                 }
 
-                OutlinedButton(onClick = onSignOut, modifier = Modifier.fillMaxWidth().padding(top = 24.dp)) {
-                    Icon(Icons.AutoMirrored.Filled.ExitToApp, contentDescription = null, modifier = Modifier.padding(end = 8.dp))
-                    Text("Sign out")
-                }
+                DangerButton(
+                    "Sign out",
+                    onSignOut,
+                    modifier = Modifier.padding(top = 24.dp),
+                    icon = Icons.AutoMirrored.Filled.ExitToApp,
+                )
             }
         }
     }
 }
 
 @Composable
-private fun SettingsRow(title: String, subtitle: String, onClick: () -> Unit, icon: @Composable () -> Unit) {
-    ListItem(
-        headlineContent = { Text(title) },
-        supportingContent = { Text(subtitle) },
-        leadingContent = icon,
-        trailingContent = { Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = null) },
-        colors = ListItemDefaults.colors(containerColor = Color.Transparent),
-        modifier = Modifier.clickable(onClick = onClick),
+private fun SettingsRow(
+    title: String,
+    subtitle: String,
+    icon: ImageVector,
+    onClick: () -> Unit,
+    showDivider: Boolean = false,
+) {
+    ListRow(
+        title = title,
+        subtitle = subtitle,
+        leading = { IconTile(icon) },
+        // Past the icon rail, so the two rows read as one object.
+        showDivider = showDivider,
+        dividerInset = 55.dp,
+        trailing = {
+            Icon(
+                Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                contentDescription = null,
+                tint = LocalAppColors.current.label3,
+            )
+        },
+        onClick = onClick,
     )
 }

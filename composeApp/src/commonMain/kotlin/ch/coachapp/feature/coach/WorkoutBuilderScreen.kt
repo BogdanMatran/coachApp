@@ -42,6 +42,7 @@ import ch.coachapp.core.ui.BackTopBar
 import ch.coachapp.core.ui.BarAction
 import ch.coachapp.core.ui.Centered
 import ch.coachapp.core.ui.ErrorBox
+import ch.coachapp.core.ui.ExerciseThumb
 import ch.coachapp.core.ui.LoadingBox
 import ch.coachapp.data.model.Exercise
 import ch.coachapp.data.repository.LibraryRepository
@@ -216,7 +217,8 @@ fun WorkoutBuilderScreen(state: WorkoutBuilderUiState, actions: WorkoutBuilderVi
             title = "Add exercise",
             items = state.library,
             itemLabel = { it.name },
-            itemSubtitle = { listOfNotNull(it.muscleGroup, it.equipment).joinToString(" · ").ifEmpty { null } },
+            itemSubtitle = { it.attributes.joinToString(" · ").ifEmpty { null } },
+            itemLeading = { ExerciseThumb(it, size = 44.dp) },
             onPick = { actions.addExercise(dayKey, it); pickingFor = null },
             onDismiss = { pickingFor = null },
         )
@@ -282,7 +284,8 @@ private fun ExerciseEditor(
     onRemove: () -> Unit,
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            ExerciseThumb(exercise.exercise, size = 40.dp)
             Column(Modifier.weight(1f)) {
                 Text(exercise.exercise.name, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
                 exercise.exercise.muscleGroup?.let { Text(it, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }

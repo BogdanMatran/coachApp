@@ -40,6 +40,7 @@ import ch.coachapp.core.ui.ConfirmDialog
 import ch.coachapp.core.ui.EmptyState
 import ch.coachapp.core.ui.ErrorBox
 import ch.coachapp.core.ui.LoadingBox
+import ch.coachapp.core.ui.bottomBarInset
 import ch.coachapp.data.model.PlanKind
 import ch.coachapp.data.model.PlanSummary
 import ch.coachapp.data.repository.PlanRepository
@@ -136,7 +137,7 @@ fun PlansScreen(
                         "Templates are reusable plans you can assign to any client. Each client gets their own copy.",
                     )
                     else -> LazyColumn(
-                        contentPadding = PaddingValues(16.dp, 8.dp, 16.dp, 96.dp),
+                        contentPadding = PaddingValues(16.dp, 8.dp, 16.dp, 96.dp + bottomBarInset()),
                         verticalArrangement = Arrangement.spacedBy(8.dp),
                     ) {
                         items(templates, key = { it.id }) { plan ->

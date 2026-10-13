@@ -29,3 +29,20 @@ fun createAppSupabaseClient(): SupabaseClient =
 
 /** Lets each platform rewrite the configured URL, e.g. localhost -> emulator host loopback on Android. */
 expect fun resolveSupabaseUrl(url: String): String
+
+/** The public bucket holding the exercise thumbnails and animations. */
+const val ExerciseMediaBucket = "exercise-media"
+
+/**
+ * Resolves a filename stored in `exercises.image_path` / `gif_path` to a public URL. The bucket is
+ * public, so there is nothing to sign and no round trip: the rows carry bare filenames, which keeps
+ * moving or re-hosting the media a one-line change here rather than a migration over 1,324 rows.
+ * Populate the bucket with scripts/sync-exercise-media.sh.
+ */
+fun exerciseMediaUrl(path: String, folder: String): String =
+    "${resolveSupabaseUrl(AppConfig.SUPABASE_URL).trimEnd('/')}" +
+        "/storage/v1/object/public/$ExerciseMediaBucket/$folder/$path"
+
+fun exerciseImageUrl(path: String): String = exerciseMediaUrl(path, "img")
+
+fun exerciseGifUrl(path: String): String = exerciseMediaUrl(path, "gif")

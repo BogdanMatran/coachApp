@@ -51,6 +51,8 @@ supabase-postgrest = { module = "io.github.jan-tennert.supabase:postgrest-kt" }
 supabase-storage = { module = "io.github.jan-tennert.supabase:storage-kt" }
 coil-compose = { module = "io.coil-kt.coil3:coil-compose", version.ref = "coil" }
 coil-network-ktor = { module = "io.coil-kt.coil3:coil-network-ktor3", version.ref = "coil" }
+# Android only: Coil publishes coil-gif as an .aar with no Kotlin/Native or wasm variants.
+coil-gif = { module = "io.coil-kt.coil3:coil-gif", version.ref = "coil" }
 filekit-dialogs-compose = { module = "io.github.vinceglb:filekit-dialogs-compose", version.ref = "filekit" }
 kotlin-test = { module = "org.jetbrains.kotlin:kotlin-test", version.ref = "kotlin" }
 

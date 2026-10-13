@@ -1,63 +1,223 @@
 package ch.coachapp.core.ui
 
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.LocalIndication
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.ColorScheme
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Shapes
+import androidx.compose.material3.Typography
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.Immutable
+import androidx.compose.runtime.Stable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.lerp
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import ch.coachapp.core.KeyValueStore
+import ch.coachapp.core.rememberKeyValueStore
+import androidx.compose.ui.unit.sp
 
 /**
- * Design system palette. Each hue has 400 (strong) to 100 (tint) steps; neutrals cover text,
- * borders and surfaces. Dark-mode neutrals are derived from "Headings Black".
+ * The palette is a four-step surface ramp plus four label alphas, in the style of the iOS system
+ * colours. Elevation is expressed by moving up the ramp, never by a shadow: cards are flat.
+ *
+ * Everything here is a value rather than a top-level constant so a coach-specific palette can be
+ * built at runtime later (see docs/PLAN.md, phase 3) without reworking the theme.
  */
-object Palette {
-    val Magenta400 = Color(0xFF8A35F9)
-    val Magenta300 = Color(0xFFC197F7)
-    val Magenta200 = Color(0xFFDCC9F9)
-    val Magenta100 = Color(0xFFECE5FA)
-
-    val Blue400 = Color(0xFF3A5CF6)
-    val Blue300 = Color(0xFF9AABF6)
-    val Blue200 = Color(0xFFCCD3FB)
-    val Blue100 = Color(0xFFE7EBFA)
-
-    val Green400 = Color(0xFF5FCC3C)
-    val Green300 = Color(0xFF9BE38C)
-    val Green200 = Color(0xFFC7EDC5)
-    val Green100 = Color(0xFFE4F5E5)
-
-    val Yellow400 = Color(0xFFFBEC62)
-    val Yellow300 = Color(0xFFFCF5AC)
-    val Yellow200 = Color(0xFFFDF9D3)
-    val Yellow100 = Color(0xFFFFFDEE)
-
-    val Red400 = Color(0xFFEE7A8C)
-    val Red300 = Color(0xFFF2B9C4)
-    val Red200 = Color(0xFFF6D7DF)
-    val Red100 = Color(0xFFFCECEE)
-
-    val HeadingsBlack = Color(0xFF0D0A2C)
-    val TextGray = Color(0xFF615E83)
-    val Neutral600 = Color(0xFF807E9A)
-    val Neutral500 = Color(0xFFE5E5EF)
-    val Neutral400 = Color(0xFFF2F1FF)
-    val Neutral300 = Color(0xFFF7F7FB)
-    val Neutral200 = Color(0xFFF8F8FF)
-
-    // Dark-mode surfaces, stepping up from Headings Black.
-    val Night = HeadingsBlack
-    val NightCard = Color(0xFF1A1740)
-    val NightRaised = Color(0xFF26225A)
-    val NightBorder = Color(0xFF3A3670)
-    val NightText = Color(0xFFB7B5D6)
+@Immutable
+data class AppColors(
+    /** Page ground. */
+    val bg: Color,
+    /** Elevated backdrop: bars and sheets. */
+    val bgEl: Color,
+    /** Card and grouped-list fill. */
+    val surface: Color,
+    /** Pressed state, nested fill, text fields. */
+    val surface2: Color,
+    /** Controls: segmented track, slider track. */
+    val surface3: Color,
+    /** The raised thumb that sits on a [surface3] control track. */
+    val thumb: Color,
+    val label: Color,
+    val label2: Color,
+    val label3: Color,
+    val label4: Color,
+    /** Hairline separator; draw it [HairlineWidth] thick. */
+    val sep: Color,
+    /** Accent, and the label colour that sits on top of it. */
+    val acc: Color,
+    /** Accent in its pressed state. */
+    val acc2: Color,
+    val onAcc: Color,
+    /** Accent at 16%: tinted buttons, tags and chips. */
+    val accSoft: Color,
+    /** Accent at 38%: the inset outline on a "current" card. */
+    val accLine: Color,
+    val blue: Color,
+    val green: Color,
+    val red: Color,
+    val orange: Color,
+    val yellow: Color,
+    val teal: Color,
+    val purple: Color,
+    val grey: Color,
+) {
+    /**
+     * The five heat steps shared by the activity heatmap and any other density scale. Unlike
+     * [accSoft] these are opaque blends towards [surface2], so they stay legible on any ground.
+     */
+    val heat: List<Color> get() = listOf(
+        surface2,
+        lerp(surface2, acc, 0.30f),
+        lerp(surface2, acc, 0.55f),
+        lerp(surface2, acc, 0.78f),
+        acc,
+    )
 }
+
+/** Separators are sub-pixel, so a list reads as one object rather than a stack of boxes. */
+val HairlineWidth = 0.5.dp
+
+/**
+ * Blends two palettes. Switching theme animates this one fraction rather than cross-fading a
+ * snapshot of the screen, so every surface, label and accent moves together and the app stays
+ * fully interactive while it happens. `heat` is derived, so it follows for free.
+ */
+fun lerp(start: AppColors, stop: AppColors, fraction: Float): AppColors = AppColors(
+    bg = lerp(start.bg, stop.bg, fraction),
+    bgEl = lerp(start.bgEl, stop.bgEl, fraction),
+    surface = lerp(start.surface, stop.surface, fraction),
+    surface2 = lerp(start.surface2, stop.surface2, fraction),
+    surface3 = lerp(start.surface3, stop.surface3, fraction),
+    thumb = lerp(start.thumb, stop.thumb, fraction),
+    label = lerp(start.label, stop.label, fraction),
+    label2 = lerp(start.label2, stop.label2, fraction),
+    label3 = lerp(start.label3, stop.label3, fraction),
+    label4 = lerp(start.label4, stop.label4, fraction),
+    sep = lerp(start.sep, stop.sep, fraction),
+    acc = lerp(start.acc, stop.acc, fraction),
+    acc2 = lerp(start.acc2, stop.acc2, fraction),
+    onAcc = lerp(start.onAcc, stop.onAcc, fraction),
+    accSoft = lerp(start.accSoft, stop.accSoft, fraction),
+    accLine = lerp(start.accLine, stop.accLine, fraction),
+    blue = lerp(start.blue, stop.blue, fraction),
+    green = lerp(start.green, stop.green, fraction),
+    red = lerp(start.red, stop.red, fraction),
+    orange = lerp(start.orange, stop.orange, fraction),
+    yellow = lerp(start.yellow, stop.yellow, fraction),
+    teal = lerp(start.teal, stop.teal, fraction),
+    purple = lerp(start.purple, stop.purple, fraction),
+    grey = lerp(start.grey, stop.grey, fraction),
+)
+
+private fun appColors(
+    bg: Color,
+    bgEl: Color,
+    surface: Color,
+    surface2: Color,
+    surface3: Color,
+    thumb: Color,
+    label: Color,
+    labelTint: Color,
+    label2Alpha: Float,
+    label3Alpha: Float,
+    label4Alpha: Float,
+    sep: Color,
+    blue: Color,
+    green: Color,
+    red: Color,
+    orange: Color,
+    yellow: Color,
+    teal: Color,
+    purple: Color,
+) = AppColors(
+    bg = bg,
+    bgEl = bgEl,
+    surface = surface,
+    surface2 = surface2,
+    surface3 = surface3,
+    thumb = thumb,
+    label = label,
+    label2 = labelTint.copy(alpha = label2Alpha),
+    label3 = labelTint.copy(alpha = label3Alpha),
+    label4 = labelTint.copy(alpha = label4Alpha),
+    sep = sep,
+    acc = green,
+    acc2 = Color(0xFF248A3D),
+    // Black on green in both themes, by measured contrast: white on the light green is 2.22:1 and
+    // fails AA for 17sp/600 button text, where black scores 9.46:1.
+    onAcc = Color.Black,
+    accSoft = green.copy(alpha = 0.16f),
+    accLine = green.copy(alpha = 0.38f),
+    blue = blue,
+    green = green,
+    red = red,
+    orange = orange,
+    yellow = yellow,
+    teal = teal,
+    purple = purple,
+    grey = Color(0xFF8E8E93),
+)
+
+val DarkAppColors = appColors(
+    bg = Color(0xFF000000),
+    bgEl = Color(0xFF0E0E10),
+    surface = Color(0xFF1C1C1E),
+    surface2 = Color(0xFF2C2C2E),
+    surface3 = Color(0xFF3A3A3C),
+    thumb = Color(0xFF636366),
+    label = Color(0xFFFFFFFF),
+    labelTint = Color(0xFFEBEBF5),
+    label2Alpha = 0.60f,
+    label3Alpha = 0.32f,
+    label4Alpha = 0.18f,
+    sep = Color(0xFF545458).copy(alpha = 0.60f),
+    blue = Color(0xFF0A84FF),
+    green = Color(0xFF30D158),
+    red = Color(0xFFFF453A),
+    orange = Color(0xFFFF9F0A),
+    yellow = Color(0xFFFFD60A),
+    teal = Color(0xFF40C8E0),
+    purple = Color(0xFFBF5AF2),
+)
+
+val LightAppColors = appColors(
+    bg = Color(0xFFF2F2F7),
+    bgEl = Color(0xFFF7F7FA),
+    surface = Color(0xFFFFFFFF),
+    surface2 = Color(0xFFECECEF),
+    surface3 = Color(0xFFE3E3E8),
+    thumb = Color(0xFFFFFFFF),
+    label = Color(0xFF000000),
+    labelTint = Color(0xFF3C3C43),
+    label2Alpha = 0.60f,
+    label3Alpha = 0.30f,
+    label4Alpha = 0.16f,
+    sep = Color(0xFF3C3C43).copy(alpha = 0.29f),
+    blue = Color(0xFF007AFF),
+    green = Color(0xFF34C759),
+    red = Color(0xFFFF3B30),
+    orange = Color(0xFFFF9500),
+    yellow = Color(0xFFFFCC00),
+    teal = Color(0xFF30B0C7),
+    purple = Color(0xFFAF52DE),
+)
+
+val LocalAppColors = staticCompositionLocalOf { DarkAppColors }
 
 /** Colors for charts and data visualisation; series hues stay the same in both themes. */
 @Immutable
@@ -74,108 +234,178 @@ data class ChartColors(
     val heat: List<Color>,
 )
 
-private val LightChartColors = ChartColors(
-    workouts = Palette.Magenta400,
-    meals = Palette.Green400,
-    supplements = Palette.Blue400,
-    protein = Palette.Blue400,
-    carbs = Palette.Yellow400,
-    fat = Palette.Red400,
-    track = Palette.Neutral400,
-    heat = listOf(Palette.Neutral500, Palette.Magenta200, Palette.Magenta300, Color(0xFFA766F8), Palette.Magenta400),
+private fun AppColors.toChartColors() = ChartColors(
+    workouts = acc,
+    meals = teal,
+    supplements = blue,
+    protein = blue,
+    carbs = yellow,
+    fat = red,
+    track = surface3,
+    heat = heat,
 )
 
-private val DarkChartColors = ChartColors(
-    workouts = Palette.Magenta300,
-    meals = Palette.Green400,
-    supplements = Palette.Blue300,
-    protein = Palette.Blue300,
-    carbs = Palette.Yellow400,
-    fat = Palette.Red400,
-    track = Palette.NightRaised,
-    heat = listOf(Palette.NightRaised, Color(0xFF3B2A78), Color(0xFF5B34A8), Color(0xFF7E3FE0), Palette.Magenta300),
+val LocalChartColors = staticCompositionLocalOf { DarkAppColors.toChartColors() }
+
+/**
+ * Material reads cards from `surfaceContainerHighest` and fields from `surfaceVariant`, so the
+ * ramp maps onto the container slots in order. Everything Material has no slot for — the two
+ * faintest label steps, the hairline, the accent tints, the status hues — lives in [AppColors].
+ */
+private fun AppColors.toColorScheme(dark: Boolean): ColorScheme =
+    (if (dark) darkColorScheme() else lightColorScheme()).copy(
+        primary = acc,
+        onPrimary = onAcc,
+        primaryContainer = accSoft,
+        onPrimaryContainer = acc,
+        inversePrimary = acc,
+        secondary = acc,
+        onSecondary = onAcc,
+        secondaryContainer = accSoft,
+        onSecondaryContainer = acc,
+        tertiary = blue,
+        onTertiary = onAcc,
+        tertiaryContainer = blue.copy(alpha = 0.16f),
+        onTertiaryContainer = blue,
+        background = bg,
+        onBackground = label,
+        surface = bg,
+        onSurface = label,
+        surfaceVariant = surface2,
+        onSurfaceVariant = label2,
+        // No tonal elevation: height is the surface ramp, not a tint or a shadow.
+        surfaceTint = Color.Transparent,
+        inverseSurface = label,
+        inverseOnSurface = bg,
+        error = red,
+        onError = onAcc,
+        errorContainer = red.copy(alpha = 0.15f),
+        onErrorContainer = red,
+        outline = label3,
+        outlineVariant = sep,
+        scrim = Color.Black.copy(alpha = 0.4f),
+        surfaceBright = surface2,
+        surfaceDim = bg,
+        surfaceContainerLowest = bg,
+        surfaceContainerLow = bgEl,
+        surfaceContainer = surface,
+        surfaceContainerHigh = surface2,
+        surfaceContainerHighest = surface,
+    )
+
+/**
+ * One scale, mostly regular weight: size carries the hierarchy and weight carries meaning (600 for
+ * a title, 400 for its content). Tracking is negative and tightens as the size grows. Every style
+ * is tabular so a number never jitters as it changes.
+ */
+private const val TabularNums = "tnum"
+
+private fun appType(
+    size: Int,
+    lineHeight: Int,
+    weight: FontWeight,
+    tracking: Float,
+) = TextStyle(
+    fontFamily = FontFamily.Default,
+    fontSize = size.sp,
+    lineHeight = lineHeight.sp,
+    fontWeight = weight,
+    letterSpacing = tracking.sp,
+    fontFeatureSettings = TabularNums,
 )
 
-val LocalChartColors = staticCompositionLocalOf { LightChartColors }
-
-private val LightColors = lightColorScheme(
-    primary = Palette.Magenta400,
-    onPrimary = Color.White,
-    primaryContainer = Palette.Magenta100,
-    onPrimaryContainer = Color(0xFF3A0E78),
-    // Material uses secondary for selected nav labels, chips and indicators: keep it in the violet family.
-    secondary = Color(0xFF6C2BD0),
-    onSecondary = Color.White,
-    secondaryContainer = Palette.Magenta100,
-    onSecondaryContainer = Color(0xFF3A0E78),
-    tertiary = Palette.Blue400,
-    onTertiary = Color.White,
-    tertiaryContainer = Palette.Blue100,
-    onTertiaryContainer = Color(0xFF0F1F6B),
-    background = Palette.Neutral200,
-    onBackground = Palette.HeadingsBlack,
-    surface = Palette.Neutral200,
-    onSurface = Palette.HeadingsBlack,
-    surfaceVariant = Palette.Neutral400,
-    onSurfaceVariant = Palette.TextGray,
-    surfaceContainerLowest = Color.White,
-    surfaceContainerLow = Color.White,
-    surfaceContainer = Palette.Neutral200,
-    surfaceContainerHigh = Color.White,
-    // Cards use surfaceContainerHighest: white cards on the near-white page.
-    surfaceContainerHighest = Color.White,
-    outline = Palette.Neutral600,
-    outlineVariant = Palette.Neutral500,
-    error = Color(0xFFD93A4E),
-    onError = Color.White,
-    errorContainer = Palette.Red100,
-    onErrorContainer = Color(0xFF7A1222),
+private val AppTypography = Typography(
+    displayLarge = appType(34, 36, FontWeight.Bold, -0.95f),
+    displayMedium = appType(34, 36, FontWeight.Bold, -0.95f),
+    displaySmall = appType(34, 36, FontWeight.Bold, -0.95f),
+    headlineLarge = appType(34, 36, FontWeight.Bold, -0.95f),
+    headlineMedium = appType(28, 31, FontWeight.Bold, -0.67f),
+    headlineSmall = appType(22, 26, FontWeight.Bold, -0.46f),
+    titleLarge = appType(22, 26, FontWeight.Bold, -0.46f),
+    titleMedium = appType(17, 22, FontWeight.SemiBold, -0.20f),
+    titleSmall = appType(15, 20, FontWeight.SemiBold, -0.09f),
+    bodyLarge = appType(17, 22, FontWeight.Normal, -0.20f),
+    bodyMedium = appType(16, 21, FontWeight.Normal, -0.14f),
+    bodySmall = appType(15, 20, FontWeight.Normal, -0.09f),
+    labelLarge = appType(15, 20, FontWeight.Medium, -0.09f),
+    labelMedium = appType(13, 18, FontWeight.Normal, -0.01f),
+    labelSmall = appType(12, 16, FontWeight.Normal, 0f),
 )
 
-private val DarkColors = darkColorScheme(
-    primary = Palette.Magenta300,
-    onPrimary = Palette.HeadingsBlack,
-    primaryContainer = Color(0xFF4A2496),
-    onPrimaryContainer = Palette.Magenta100,
-    secondary = Palette.Magenta300,
-    onSecondary = Palette.HeadingsBlack,
-    secondaryContainer = Color(0xFF3B2A78),
-    onSecondaryContainer = Palette.Magenta100,
-    tertiary = Palette.Blue300,
-    onTertiary = Palette.HeadingsBlack,
-    tertiaryContainer = Color(0xFF26337A),
-    onTertiaryContainer = Palette.Blue100,
-    background = Palette.Night,
-    onBackground = Palette.Neutral200,
-    surface = Palette.Night,
-    onSurface = Palette.Neutral200,
-    surfaceVariant = Palette.NightRaised,
-    onSurfaceVariant = Palette.NightText,
-    surfaceContainerLowest = Palette.Night,
-    surfaceContainerLow = Color(0xFF141136),
-    surfaceContainer = Palette.NightCard,
-    surfaceContainerHigh = Color(0xFF201C4C),
-    surfaceContainerHighest = Palette.NightCard,
-    outline = Palette.NightBorder,
-    outlineVariant = Color(0xFF2B2760),
-    error = Palette.Red400,
-    onError = Palette.HeadingsBlack,
-    errorContainer = Color(0xFF5A1A28),
-    onErrorContainer = Palette.Red100,
-)
-
-/** Large, soft corners for cards. */
+/** Card corners are [Shapes.medium]; the ramp runs 8 / 12 / 14 / 16 / 22. */
 private val AppShapes = Shapes(
     extraSmall = RoundedCornerShape(8.dp),
     small = RoundedCornerShape(12.dp),
-    medium = RoundedCornerShape(20.dp),
-    large = RoundedCornerShape(24.dp),
-    extraLarge = RoundedCornerShape(32.dp),
+    medium = RoundedCornerShape(14.dp),
+    large = RoundedCornerShape(16.dp),
+    extraLarge = RoundedCornerShape(22.dp),
 )
 
+/** What the user picked in Settings. [System] follows the device. */
+enum class ThemeMode(val label: String) {
+    System("System"),
+    Light("Light"),
+    Dark("Dark"),
+    ;
+
+    companion object {
+        fun from(stored: String?): ThemeMode = entries.firstOrNull { it.name == stored } ?: System
+    }
+}
+
+/** Holds the chosen theme and writes it straight through, so it survives a restart. */
+@Stable
+class ThemeController(private val store: KeyValueStore) {
+
+    var mode: ThemeMode by mutableStateOf(ThemeMode.from(store.getString(StoreKey)))
+        private set
+
+    fun select(mode: ThemeMode) {
+        this.mode = mode
+        store.putString(StoreKey, mode.name)
+    }
+
+    private companion object {
+        const val StoreKey = "theme_mode"
+    }
+}
+
+val LocalThemeController = staticCompositionLocalOf<ThemeController> {
+    error("No ThemeController: wrap the content in CoachTheme")
+}
+
+/** Long enough to read as a deliberate transition, short enough not to be in the way. */
+private const val ThemeAnimationMillis = 450
+
 @Composable
-fun CoachTheme(darkTheme: Boolean = isSystemInDarkTheme(), content: @Composable () -> Unit) {
-    CompositionLocalProvider(LocalChartColors provides if (darkTheme) DarkChartColors else LightChartColors) {
-        MaterialTheme(colorScheme = if (darkTheme) DarkColors else LightColors, shapes = AppShapes, content = content)
+fun CoachTheme(content: @Composable () -> Unit) {
+    val store = rememberKeyValueStore()
+    val controller = remember(store) { ThemeController(store) }
+    val dark = when (controller.mode) {
+        ThemeMode.System -> isSystemInDarkTheme()
+        ThemeMode.Light -> false
+        ThemeMode.Dark -> true
+    }
+    // Settles on the target without animating on the first composition, so a persisted dark theme
+    // does not fade in from light at launch.
+    val fraction by animateFloatAsState(
+        targetValue = if (dark) 1f else 0f,
+        animationSpec = tween(ThemeAnimationMillis, easing = FastOutSlowInEasing),
+        label = "themeMode",
+    )
+    val colors = lerp(LightAppColors, DarkAppColors, fraction)
+    CompositionLocalProvider(
+        LocalThemeController provides controller,
+        LocalAppColors provides colors,
+        LocalChartColors provides colors.toChartColors(),
+        // Presses acknowledge with a scale, not a ripple: see Modifier.pressScale in Press.kt.
+        LocalIndication provides NoIndication,
+    ) {
+        MaterialTheme(
+            colorScheme = colors.toColorScheme(dark),
+            shapes = AppShapes,
+            typography = AppTypography,
+            content = content,
+        )
     }
 }

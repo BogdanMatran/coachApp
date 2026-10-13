@@ -2,14 +2,17 @@ package ch.coachapp.feature.coach
 
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -17,6 +20,7 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -31,10 +35,12 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.ViewModel
@@ -43,14 +49,24 @@ import androidx.lifecycle.viewModelScope
 import ch.coachapp.core.fmt
 import ch.coachapp.core.ui.BarAction
 import ch.coachapp.core.ui.Centered
+import ch.coachapp.core.ui.Chip
+import ch.coachapp.core.ui.ChipRow
 import ch.coachapp.core.ui.ConfirmDialog
 import ch.coachapp.core.ui.EmptyState
 import ch.coachapp.core.ui.ErrorBox
+import ch.coachapp.core.ui.ExerciseAnimation
+import ch.coachapp.core.ui.ExerciseThumb
 import ch.coachapp.core.ui.LoadingBox
+import ch.coachapp.core.ui.Tag
+import ch.coachapp.core.ui.bottomBarInset
+import ch.coachapp.core.ui.clearFocusOnTap
 import ch.coachapp.data.model.Exercise
 import ch.coachapp.data.model.Food
 import ch.coachapp.data.model.Supplement
+import ch.coachapp.data.repository.ExerciseFacets
+import ch.coachapp.data.repository.ExerciseFilter
 import ch.coachapp.data.repository.LibraryRepository
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -60,6 +76,9 @@ import kotlinx.coroutines.launch
 import org.koin.compose.viewmodel.koinViewModel
 
 enum class LibraryTab(val label: String) { Exercises("Exercises"), Foods("Foods"), Supplements("Supplements") }
+
+/** Rows per request. The imported library is far too large to hold in one list. */
+private const val ExercisePageSize = 60
 
 /** Item currently open in the edit dialog; a blank id means "new". */
 sealed interface LibraryEdit {
@@ -73,9 +92,17 @@ data class LibraryUiState(
     val query: String = "",
     val loading: Boolean = true,
     val exercises: List<Exercise> = emptyList(),
+    val facets: ExerciseFacets = ExerciseFacets(),
+    val bodyPart: String? = null,
+    val equipment: String? = null,
+    /** False once the server returns a short page, so the list stops asking for more. */
+    val moreExercises: Boolean = true,
+    val loadingMore: Boolean = false,
     val foods: List<Food> = emptyList(),
     val supplements: List<Supplement> = emptyList(),
     val editing: LibraryEdit? = null,
+    /** A global exercise opened read-only, to see its demo and instructions. */
+    val viewing: Exercise? = null,
     val saving: Boolean = false,
     val error: String? = null,
     val message: String? = null,
@@ -86,27 +113,79 @@ class LibraryViewModel(private val library: LibraryRepository) : ViewModel() {
     private val _state = MutableStateFlow(LibraryUiState())
     val state: StateFlow<LibraryUiState> = _state.asStateFlow()
 
+    /** Reloading the exercise page cancels the in-flight one, so fast typing cannot interleave. */
+    private var exerciseJob: Job? = null
+
     fun load() {
         viewModelScope.launch {
-            val exercises = async { library.exercises() }
             val foods = async { library.foods() }
             val supplements = async { library.supplements() }
-            val results = listOf(exercises.await(), foods.await(), supplements.await())
+            val facets = async { library.exerciseFacets() }
+            val results = listOf(foods.await(), supplements.await(), facets.await())
             val error = results.firstNotNullOfOrNull { it.exceptionOrNull()?.message }
             _state.update {
                 it.copy(
                     loading = false,
-                    exercises = exercises.await().getOrDefault(it.exercises),
                     foods = foods.await().getOrDefault(it.foods),
                     supplements = supplements.await().getOrDefault(it.supplements),
+                    facets = facets.await().getOrDefault(it.facets),
                     error = error,
                 )
             }
         }
+        loadExercises()
+    }
+
+    private fun filter() = _state.value.let { ExerciseFilter(it.query, it.bodyPart, it.equipment) }
+
+    private fun loadExercises() {
+        exerciseJob?.cancel()
+        exerciseJob = viewModelScope.launch {
+            library.exercises(filter(), limit = ExercisePageSize)
+                .onSuccess { page ->
+                    _state.update {
+                        it.copy(exercises = page, moreExercises = page.size == ExercisePageSize, error = null)
+                    }
+                }
+                .onFailure { e -> _state.update { it.copy(error = e.message) } }
+        }
+    }
+
+    fun loadMoreExercises() {
+        val current = _state.value
+        if (current.loadingMore || !current.moreExercises || current.tab != LibraryTab.Exercises) return
+        _state.update { it.copy(loadingMore = true) }
+        viewModelScope.launch {
+            library.exercises(filter(), limit = ExercisePageSize, offset = current.exercises.size)
+                .onSuccess { page ->
+                    _state.update {
+                        it.copy(
+                            exercises = it.exercises + page,
+                            moreExercises = page.size == ExercisePageSize,
+                            loadingMore = false,
+                        )
+                    }
+                }
+                .onFailure { e -> _state.update { it.copy(loadingMore = false, message = e.message) } }
+        }
     }
 
     fun selectTab(tab: LibraryTab) = _state.update { it.copy(tab = tab) }
-    fun setQuery(query: String) = _state.update { it.copy(query = query) }
+
+    fun setQuery(query: String) {
+        _state.update { it.copy(query = query) }
+        if (_state.value.tab == LibraryTab.Exercises) loadExercises()
+    }
+
+    fun setBodyPart(value: String?) {
+        _state.update { it.copy(bodyPart = value) }
+        loadExercises()
+    }
+
+    fun setEquipment(value: String?) {
+        _state.update { it.copy(equipment = value) }
+        loadExercises()
+    }
 
     fun startNew() = _state.update {
         it.copy(
@@ -120,6 +199,18 @@ class LibraryViewModel(private val library: LibraryRepository) : ViewModel() {
 
     fun edit(edit: LibraryEdit) = _state.update { it.copy(editing = edit) }
     fun dismissEdit() = _state.update { it.copy(editing = null) }
+
+    /** Global exercises are read-only, so opening one fetches the full row for its instructions. */
+    fun view(exercise: Exercise) {
+        _state.update { it.copy(viewing = exercise) }
+        viewModelScope.launch {
+            library.exercise(exercise.id).onSuccess { full ->
+                _state.update { if (it.viewing?.id == full.id) it.copy(viewing = full) else it }
+            }
+        }
+    }
+
+    fun dismissView() = _state.update { it.copy(viewing = null) }
 
     fun save(edit: LibraryEdit) {
         _state.update { it.copy(saving = true) }
@@ -167,16 +258,31 @@ fun LibraryDestination(viewModel: LibraryViewModel = koinViewModel()) {
         onSave = viewModel::save,
         onDelete = viewModel::delete,
         onMessageShown = viewModel::messageShown,
+        onBodyPartChange = viewModel::setBodyPart,
+        onEquipmentChange = viewModel::setEquipment,
+        onLoadMore = viewModel::loadMoreExercises,
+        onView = viewModel::view,
+        onDismissView = viewModel::dismissView,
     )
 }
 
 /** A library row reduced to what the list needs. */
-private data class LibraryRow(val id: String, val title: String, val subtitle: String, val global: Boolean, val edit: LibraryEdit)
+private data class LibraryRow(
+    val id: String,
+    val title: String,
+    val subtitle: String,
+    val global: Boolean,
+    val edit: LibraryEdit,
+    val exercise: Exercise? = null,
+)
 
 private fun LibraryUiState.rows(): List<LibraryRow> {
     val rows = when (tab) {
         LibraryTab.Exercises -> exercises.map {
-            LibraryRow(it.id, it.name, listOfNotNull(it.muscleGroup, it.equipment).joinToString(" · "), it.isGlobal, LibraryEdit.EditExercise(it))
+            LibraryRow(
+                it.id, it.name, it.attributes.joinToString(" · "), it.isGlobal,
+                LibraryEdit.EditExercise(it), exercise = it,
+            )
         }
         LibraryTab.Foods -> foods.map {
             LibraryRow(
@@ -190,7 +296,11 @@ private fun LibraryUiState.rows(): List<LibraryRow> {
         }
     }
     val q = query.trim()
-    return if (q.isEmpty()) rows else rows.filter { it.title.contains(q, ignoreCase = true) || it.subtitle.contains(q, ignoreCase = true) }
+    return if (q.isEmpty() || tab == LibraryTab.Exercises) {
+        rows
+    } else {
+        rows.filter { it.title.contains(q, ignoreCase = true) || it.subtitle.contains(q, ignoreCase = true) }
+    }
 }
 
 @Composable
@@ -205,6 +315,11 @@ fun LibraryScreen(
     onSave: (LibraryEdit) -> Unit,
     onDelete: (LibraryTab, String) -> Unit,
     onMessageShown: () -> Unit,
+    onBodyPartChange: (String?) -> Unit = {},
+    onEquipmentChange: (String?) -> Unit = {},
+    onLoadMore: () -> Unit = {},
+    onView: (Exercise) -> Unit = {},
+    onDismissView: () -> Unit = {},
 ) {
     val snackbar = remember { SnackbarHostState() }
     var deleting by remember { mutableStateOf<LibraryRow?>(null) }
@@ -236,23 +351,49 @@ fun LibraryScreen(
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
                 )
+                if (state.tab == LibraryTab.Exercises) {
+                    FacetChips("Any body part", state.facets.bodyParts, state.bodyPart, onBodyPartChange)
+                    FacetChips("Any equipment", state.facets.equipment, state.equipment, onEquipmentChange)
+                }
                 val rows = state.rows()
+                val listState = rememberLazyListState()
+                // Ask for the next page a few rows before the end, so scrolling does not stall.
+                val nearEnd by remember(rows.size) {
+                    derivedStateOf { (listState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: 0) >= rows.size - 8 }
+                }
+                LaunchedEffect(nearEnd, rows.size) { if (nearEnd && rows.isNotEmpty()) onLoadMore() }
                 when {
                     state.loading -> LoadingBox()
                     state.error != null && rows.isEmpty() -> ErrorBox(state.error, onRetry = onRetry)
-                    rows.isEmpty() -> EmptyState("Nothing here yet", "Add your own items with the button below.")
-                    else -> LazyColumn(contentPadding = PaddingValues(bottom = 96.dp)) {
+                    rows.isEmpty() -> EmptyState(
+                        "Nothing here yet",
+                        if (state.tab == LibraryTab.Exercises && (state.query.isNotBlank() || state.bodyPart != null || state.equipment != null)) {
+                            "No exercise matches those filters."
+                        } else {
+                            "Add your own items with the button below."
+                        },
+                    )
+                    else -> LazyColumn(state = listState, contentPadding = PaddingValues(bottom = 96.dp + bottomBarInset())) {
                         items(rows, key = { it.id }) { row ->
                             ListItem(
+                                leadingContent = row.exercise?.let { { ExerciseThumb(it, size = 44.dp) } },
                                 headlineContent = { Text(row.title) },
                                 supportingContent = row.subtitle.takeIf { it.isNotBlank() }?.let { { Text(it) } },
                                 overlineContent = if (row.global) ({ Text("Global") }) else null,
                                 trailingContent = if (!row.global) ({
                                     IconButton(onClick = { deleting = row }) { Icon(Icons.Default.Delete, contentDescription = "Delete") }
                                 }) else null,
-                                modifier = Modifier.clickable(enabled = !row.global) { onEdit(row.edit) },
+                                modifier = Modifier.clickable(
+                                    enabled = !row.global || row.exercise != null,
+                                ) {
+                                    val exercise = row.exercise
+                                    if (row.global && exercise != null) onView(exercise) else onEdit(row.edit)
+                                },
                             )
                             HorizontalDivider()
+                        }
+                        if (state.loadingMore) {
+                            item { Box(Modifier.fillMaxWidth().padding(16.dp), contentAlignment = Alignment.Center) { CircularProgressIndicator() } }
                         }
                     }
                 }
@@ -266,6 +407,7 @@ fun LibraryScreen(
         is LibraryEdit.EditSupplement -> SupplementDialog(edit.supplement, state.saving, { onSave(LibraryEdit.EditSupplement(it)) }, onDismissEdit)
         null -> Unit
     }
+    state.viewing?.let { ExerciseDetailDialog(it, onDismissView) }
     deleting?.let { row ->
         ConfirmDialog(
             title = "Delete ${row.title}?",
@@ -273,6 +415,48 @@ fun LibraryScreen(
             onConfirm = { onDelete(state.tab, row.id) },
             onDismiss = { deleting = null },
         )
+    }
+}
+
+/** A global exercise, read-only: what it looks like, what it works, and how to do it. */
+@Composable
+private fun ExerciseDetailDialog(exercise: Exercise, onDismiss: () -> Unit) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(exercise.name) },
+        text = {
+            Column(
+                Modifier.verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                ExerciseAnimation(exercise)
+                val tags = exercise.attributes + listOfNotNull(exercise.bodyPart, exercise.target)
+                if (tags.isNotEmpty()) {
+                    FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        tags.distinct().forEach { Tag(it) }
+                    }
+                }
+                exercise.instructions?.takeIf { it.isNotBlank() }?.let { steps ->
+                    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        steps.lineSequence().filter { it.isNotBlank() }.forEachIndexed { index, step ->
+                            Text("${index + 1}. $step", style = MaterialTheme.typography.bodySmall)
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {},
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Close") } },
+    )
+}
+
+/** A chip strip over one facet; the leading chip clears it. */
+@Composable
+private fun FacetChips(anyLabel: String, values: List<String>, selected: String?, onSelect: (String?) -> Unit) {
+    if (values.isEmpty()) return
+    ChipRow(Modifier.padding(horizontal = 12.dp)) {
+        Chip(anyLabel, selected == null, { onSelect(null) })
+        values.forEach { value -> Chip(value, selected == value, { onSelect(if (selected == value) null else value) }) }
     }
 }
 
@@ -289,7 +473,11 @@ private fun EditDialog(
         onDismissRequest = onDismiss,
         title = { Text(title) },
         text = {
-            Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) { content() }
+            // A dialog composes in its own window, so it needs its own tap-to-dismiss handler.
+            Column(
+                Modifier.verticalScroll(rememberScrollState()).clearFocusOnTap(),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) { content() }
         },
         confirmButton = { TextButton(onClick = onSave, enabled = canSave && !saving) { Text(if (saving) "Saving…" else "Save") } },
         dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },

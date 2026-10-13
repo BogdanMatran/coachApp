@@ -69,6 +69,27 @@ struct ComposeScreen: View {
     }
 }
 
+extension View {
+    /// Lets a tab's root Compose screen run under the tab bar, the way a native scroll view does.
+    ///
+    /// The screen still learns the bar's height: it arrives as the bottom safe-area inset, which
+    /// Compose exposes through `bottomBarInset()`, so lists pad their end and the last row can be
+    /// scrolled clear. Only use it on screens that reserve that inset (the tab roots do).
+    ///
+    /// Before iOS 26 the bar would otherwise stay in its transparent scroll-edge appearance, since
+    /// UIKit cannot see a UIScrollView inside Compose, so its blurred background is forced on.
+    /// From iOS 26 the Liquid Glass bar floats over content by itself.
+    @ViewBuilder
+    func contentUnderTabBar() -> some View {
+        let extended = ignoresSafeArea(.container, edges: .bottom)
+        if #available(iOS 26, *) {
+            extended
+        } else {
+            extended.toolbarBackground(.visible, for: .tabBar)
+        }
+    }
+}
+
 /// A full-screen Compose view without navigation chrome (sign in, join coach).
 struct ComposeFullScreen: View {
     let make: () -> UIViewController

@@ -18,6 +18,7 @@ import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -25,12 +26,14 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import ch.coachapp.core.ui.Centered
 import ch.coachapp.core.ui.EmptyState
 import ch.coachapp.core.ui.ErrorBox
+import ch.coachapp.core.ui.ExerciseThumb
 import ch.coachapp.core.ui.InfoCard
 import ch.coachapp.core.ui.LoadingBox
 import ch.coachapp.core.ui.LocalChartColors
 import ch.coachapp.core.ui.MacroDonut
 import ch.coachapp.core.ui.SectionHeader
 import ch.coachapp.core.ui.TargetBar
+import ch.coachapp.core.ui.bottomBarInset
 import ch.coachapp.data.model.MealPlan
 import ch.coachapp.data.model.SupplementPlan
 import ch.coachapp.data.model.WorkoutPlan
@@ -62,7 +65,10 @@ fun PlanScreen(state: PlanUiState, onRetry: () -> Unit, onSelectSection: (PlanSe
             when {
                 state.loading -> LoadingBox()
                 state.error != null -> ErrorBox(state.error, onRetry)
-                else -> LazyColumn(contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                else -> LazyColumn(
+                    contentPadding = PaddingValues(16.dp, 16.dp, 16.dp, 16.dp + bottomBarInset()),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
                     when (state.section) {
                         PlanSection.Workout -> workoutSection(state.workout)
                         PlanSection.Meals -> mealSection(state.meal)
@@ -96,10 +102,17 @@ private fun LazyListScope.workoutSection(plan: WorkoutPlan?) {
             day.notes?.takeIf { it.isNotBlank() }?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
             day.sortedExercises.forEachIndexed { index, we ->
                 if (index > 0) HorizontalDivider()
-                Column(Modifier.padding(vertical = 4.dp)) {
-                    Text(we.exercise?.name ?: "Exercise", style = MaterialTheme.typography.bodyLarge)
-                    Text(prescription(we), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)
-                    we.notes?.takeIf { it.isNotBlank() }?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
+                Row(
+                    Modifier.padding(vertical = 4.dp),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    we.exercise?.let { ExerciseThumb(it, size = 40.dp) }
+                    Column {
+                        Text(we.exercise?.name ?: "Exercise", style = MaterialTheme.typography.bodyLarge)
+                        Text(prescription(we), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)
+                        we.notes?.takeIf { it.isNotBlank() }?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
+                    }
                 }
             }
             if (day.exercises.isEmpty()) Text("Rest day", color = MaterialTheme.colorScheme.onSurfaceVariant)

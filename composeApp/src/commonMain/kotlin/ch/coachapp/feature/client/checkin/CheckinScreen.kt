@@ -23,9 +23,6 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.SegmentedButton
-import androidx.compose.material3.SegmentedButtonDefaults
-import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -46,8 +43,11 @@ import ch.coachapp.core.ui.ErrorBox
 import ch.coachapp.core.ui.InfoCard
 import ch.coachapp.core.ui.LoadingBox
 import ch.coachapp.core.ui.NumberField
+import ch.coachapp.core.ui.NumberSegmentedControl
 import ch.coachapp.core.ui.PrimaryButton
 import ch.coachapp.core.ui.SectionHeader
+import ch.coachapp.core.ui.YesNoSegmentedControl
+import ch.coachapp.core.ui.bottomBarInset
 import ch.coachapp.data.model.CheckinQuestion
 import ch.coachapp.data.model.MeasurementKeys
 import ch.coachapp.data.model.Pose
@@ -100,7 +100,10 @@ fun CheckinScreen(
         state.loading -> LoadingBox()
         state.error != null -> ErrorBox(state.error, onRetry)
         else -> Centered {
-            Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp)) {
+            Column(
+                Modifier.fillMaxSize().verticalScroll(rememberScrollState())
+                    .padding(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 16.dp + bottomBarInset()),
+            ) {
                 val current = state.current
                 if (current != null && state.isReviewed) {
                     CheckinReadOnly(current, state.previous, state.questions, state.photoUrls, state.previousPhotoUrls)
@@ -208,24 +211,18 @@ private fun QuestionInput(question: CheckinQuestion, value: String, onChange: (S
             Text(question.label, style = MaterialTheme.typography.bodyLarge)
         }
         when (question.type) {
-            QuestionType.Scale -> SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth()) {
-                (1..5).forEach { n ->
-                    SegmentedButton(
-                        selected = value == n.toString(),
-                        onClick = { onChange(n.toString()) },
-                        shape = SegmentedButtonDefaults.itemShape(n - 1, 5),
-                    ) { Text("$n") }
-                }
-            }
-            QuestionType.YesNo -> SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth()) {
-                listOf("yes" to "Yes", "no" to "No").forEachIndexed { index, (key, label) ->
-                    SegmentedButton(
-                        selected = value == key,
-                        onClick = { onChange(key) },
-                        shape = SegmentedButtonDefaults.itemShape(index, 2),
-                    ) { Text(label) }
-                }
-            }
+            QuestionType.Scale -> NumberSegmentedControl(
+                value = value.toIntOrNull(),
+                onValueChange = { onChange(it.toString()) },
+            )
+            QuestionType.YesNo -> YesNoSegmentedControl(
+                value = when (value) {
+                    "yes" -> true
+                    "no" -> false
+                    else -> null
+                },
+                onValueChange = { onChange(if (it) "yes" else "no") },
+            )
             QuestionType.Number -> NumberField(value, onChange, question.label, Modifier.fillMaxWidth())
             QuestionType.Text -> OutlinedTextField(
                 value = value,
